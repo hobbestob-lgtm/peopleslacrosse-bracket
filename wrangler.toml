@@ -1,0 +1,7 @@
+name = "peopleslacrosse-bracket"
+pages_build_output_dir = "out"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "bracket-db"
+database_id = "db83c23f-1ef0-430d-be93-30d5c6343321"
