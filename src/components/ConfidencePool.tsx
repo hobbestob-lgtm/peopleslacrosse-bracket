@@ -4,7 +4,13 @@ import { useState, useEffect, useCallback } from 'react';
 import { TournamentConfig, Team } from '@/types/bracket';
 import { WeeklySchedule, ConfidencePick } from '@/types/confidence-pool';
 import { pll2026Schedule, wll2026Schedule, getCurrentWeek } from '@/tournaments/schedules';
-import { validateConfidencePicks } from '@/types/confidence-pool';
+import { validateConfidencePicks, maxPossibleScore } from '@/types/confidence-pool';
+import {
+  openConfidenceShareImageInNewTab,
+  openConfidenceStoryImageInNewTab,
+  downloadConfidenceShareImage,
+  copyConfidenceShareImageToClipboard,
+} from '@/lib/confidence-share-image';
 
 interface ConfidencePoolProps {
   tournament: TournamentConfig;
@@ -408,22 +414,107 @@ export default function ConfidencePool({ tournament, onBack }: ConfidencePoolPro
               </div>
             )}
 
-            {/* Share buttons */}
-            <div className="space-y-3">
-              <h3 className="text-lg font-bold text-gray-300">Share Your Picks</h3>
-              <div className="flex gap-3 justify-center flex-wrap">
+            {/* Share image section */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-bold text-gray-300">📸 Share Your Picks</h3>
+              <p className="text-sm text-gray-400">Generate a branded image for Instagram & TikTok</p>
+
+              {/* Image buttons */}
+              <div className="grid grid-cols-2 gap-3">
                 <button
                   onClick={() => {
-                    const text = `🥍 My ${tournament.shortName} Week ${selectedWeek} confidence pool picks! ${totalMaxPoints} pts max. Make yours at bracket.peopleslacrosse.com/?tournament=${tournament.slug}`;
+                    const upcomingPicks = picks.filter(p => p.winnerId && p.confidence > 0);
+                    if (upcomingPicks.length > 0) {
+                      openConfidenceShareImageInNewTab({
+                        tournament,
+                        weekSchedule: weekSchedule!,
+                        picks: upcomingPicks,
+                        displayName: displayName || 'Anonymous',
+                        totalPoints: upcomingPicks.reduce((sum, p) => sum + p.confidence, 0),
+                        maxPoints: maxPossibleScore(matchupCount),
+                      });
+                    }
+                  }}
+                  className="bg-gradient-to-r from-[#ffd700] to-[#ff8c00] text-black font-bold py-3 px-4 rounded-xl hover:scale-105 transition-all"
+                >
+                  📱 Open Image
+                </button>
+                <button
+                  onClick={() => {
+                    const upcomingPicks = picks.filter(p => p.winnerId && p.confidence > 0);
+                    if (upcomingPicks.length > 0) {
+                      openConfidenceStoryImageInNewTab({
+                        tournament,
+                        weekSchedule: weekSchedule!,
+                        picks: upcomingPicks,
+                        displayName: displayName || 'Anonymous',
+                        totalPoints: upcomingPicks.reduce((sum, p) => sum + p.confidence, 0),
+                        maxPoints: maxPossibleScore(matchupCount),
+                      });
+                    }
+                  }}
+                  className="bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold py-3 px-4 rounded-xl hover:scale-105 transition-all"
+                >
+                  🎬 Story Image
+                </button>
+              </div>
+
+              {/* Download + Copy */}
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={() => {
+                    const upcomingPicks = picks.filter(p => p.winnerId && p.confidence > 0);
+                    if (upcomingPicks.length > 0) {
+                      downloadConfidenceShareImage({
+                        tournament,
+                        weekSchedule: weekSchedule!,
+                        picks: upcomingPicks,
+                        displayName: displayName || 'Anonymous',
+                        totalPoints: upcomingPicks.reduce((sum, p) => sum + p.confidence, 0),
+                        maxPoints: maxPossibleScore(matchupCount),
+                      });
+                    }
+                  }}
+                  className="bg-[#1a2a44] text-gray-300 font-medium py-2.5 px-4 rounded-xl border border-[#2a3a54] hover:border-[#ffd700]/50 transition-all text-sm"
+                >
+                  💾 Download PNG
+                </button>
+                <button
+                  onClick={async () => {
+                    const upcomingPicks = picks.filter(p => p.winnerId && p.confidence > 0);
+                    if (upcomingPicks.length > 0) {
+                      const success = await copyConfidenceShareImageToClipboard({
+                        tournament,
+                        weekSchedule: weekSchedule!,
+                        picks: upcomingPicks,
+                        displayName: displayName || 'Anonymous',
+                        totalPoints: upcomingPicks.reduce((sum, p) => sum + p.confidence, 0),
+                        maxPoints: maxPossibleScore(matchupCount),
+                      });
+                      if (!success) alert('Copy failed — try downloading instead');
+                    }
+                  }}
+                  className="bg-[#1a2a44] text-gray-300 font-medium py-2.5 px-4 rounded-xl border border-[#2a3a54] hover:border-[#ffd700]/50 transition-all text-sm"
+                >
+                  📋 Copy Image
+                </button>
+              </div>
+
+              {/* Social share */}
+              <div className="mt-4 space-y-3">
+                <button
+                  onClick={() => {
+                    const text = `🥍 My ${tournament.shortName} Week ${selectedWeek} confidence pool picks! ${totalMaxPoints} pts max. Make yours at bracket.peopleslacrosse.com/?tournament=${tournament.slug}&mode=confidence`;
                     window.open(`https://x.com/intent/tweet?text=${encodeURIComponent(text)}`, '_blank');
                   }}
-                  className="bg-black text-white px-4 py-2 rounded-lg font-medium hover:bg-gray-800 transition-all"
+                  className="w-full bg-black text-white px-4 py-2.5 rounded-lg font-medium hover:bg-gray-800 transition-all flex items-center justify-center gap-2"
                 >
                   𝕏 Share on X
                 </button>
               </div>
-              <p className="text-xs text-gray-500 mt-2">
-                💡 Tip: Save your bracket image first, then share on Instagram or TikTok!
+
+              <p className="text-xs text-gray-500 text-center mt-2">
+                💡 Open the image in a new tab, save it, then share on Instagram Story or TikTok!
               </p>
             </div>
 
