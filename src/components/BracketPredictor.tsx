@@ -5,6 +5,7 @@ import { BracketPick, TournamentConfig, Team, GroupPick, KnockoutPick } from '@/
 import { resolveKnockoutMatchTeams } from '@/lib/bracket-engine';
 import { createBracket, collectEmail } from '@/lib/storage';
 import { downloadShareImage, copyShareImageToClipboard } from '@/lib/share-image';
+import CommunityStats from '@/components/CommunityStats';
 
 interface BracketPredictorProps {
   tournament: TournamentConfig;
@@ -1097,6 +1098,9 @@ function ReviewSave({
               </div>
             )}
           </div>
+
+          {/* Community stats */}
+          <CommunityStats tournament={tournament} mode="bracket" />
 
           {/* Donate placeholder */}
           <div className="bg-[#1a2a44] rounded-xl p-4 border border-[#2a3a54] border-dashed">

@@ -11,6 +11,7 @@ import {
   downloadConfidenceShareImage,
   copyConfidenceShareImageToClipboard,
 } from '@/lib/confidence-share-image';
+import CommunityStats from '@/components/CommunityStats';
 
 interface ConfidencePoolProps {
   tournament: TournamentConfig;
@@ -517,6 +518,9 @@ export default function ConfidencePool({ tournament, onBack }: ConfidencePoolPro
                 💡 Open the image in a new tab, save it, then share on Instagram Story or TikTok!
               </p>
             </div>
+
+            {/* Community stats */}
+            <CommunityStats tournament={tournament} weekSchedule={weekSchedule!} mode="confidence" />
 
             <div className="pt-4">
               <button
