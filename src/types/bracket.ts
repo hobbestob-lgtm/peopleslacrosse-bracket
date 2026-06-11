@@ -7,6 +7,7 @@ export interface Team {
   flag: string; // Emoji flag or abbreviation
   group: string; // Group letter
   seed?: number;
+  record?: string; // e.g. '3-2'
 }
 
 export interface Group {

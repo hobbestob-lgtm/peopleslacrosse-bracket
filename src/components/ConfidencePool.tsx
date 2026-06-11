@@ -31,6 +31,7 @@ export default function ConfidencePool({ tournament, onBack }: ConfidencePoolPro
   const [saving, setSaving] = useState(false);
   const [savedId, setSavedId] = useState<string | null>(null);
   const [errors, setErrors] = useState<string[]>([]);
+  const [communityStats, setCommunityStats] = useState<any>(null);
 
   const weekSchedule = schedule.find(w => w.weekNumber === selectedWeek);
   const matchupCount = weekSchedule?.matchups.length || 0;
@@ -105,6 +106,11 @@ export default function ConfidencePool({ tournament, onBack }: ConfidencePoolPro
       if (data.success) {
         setSavedId(data.entryId || null);
         setStep('saved');
+        // Fetch community stats for share image
+        fetch(`/api/stats?tournamentId=${tournament.id}&type=confidence&week=${selectedWeek}`)
+          .then(r => r.json())
+          .then((d: any) => { if (d.success && d.confidence) setCommunityStats(d.confidence); })
+          .catch(() => {});
       } else {
         setErrors([data.error || 'Failed to save picks']);
       }
@@ -121,11 +127,30 @@ export default function ConfidencePool({ tournament, onBack }: ConfidencePoolPro
       }));
       setSavedId(entryId);
       setStep('saved');
+      // Fetch community stats for share image
+      fetch(`/api/stats?tournamentId=${tournament.id}&type=confidence&week=${selectedWeek}`)
+        .then(r => r.json())
+        .then((d: any) => { if (d.success && d.confidence) setCommunityStats(d.confidence); })
+        .catch(() => {});
     }
     setSaving(false);
   };
 
   const totalMaxPoints = (matchupCount * (matchupCount + 1)) / 2;
+
+  // Share image options helper (includes community stats)
+  const getShareImageOptions = () => {
+    const upcomingPicks = picks.filter(p => p.winnerId && p.confidence > 0);
+    return {
+      tournament,
+      weekSchedule: weekSchedule!,
+      picks: upcomingPicks,
+      displayName: displayName || 'Anonymous',
+      totalPoints: upcomingPicks.reduce((sum, p) => sum + p.confidence, 0),
+      maxPoints: maxPossibleScore(matchupCount),
+      communityStats: communityStats || undefined,
+    };
+  };
 
   if (!weekSchedule) {
     return (
@@ -210,12 +235,14 @@ export default function ConfidencePool({ tournament, onBack }: ConfidencePoolPro
                         <div className={`flex items-center gap-2 ${matchup.homeScore! > matchup.awayScore! ? 'font-bold' : 'text-gray-400'}`}>
                           <span className="text-lg">{homeTeam?.flag}</span>
                           <span>{homeTeam?.shortName}</span>
+                          {homeTeam?.record && <span className="text-xs text-gray-500 ml-1">{homeTeam.record}</span>}
                           <span className="text-lg font-bold">{matchup.homeScore}</span>
                         </div>
                         <span className="text-gray-600 text-sm">vs</span>
                         <div className={`flex items-center gap-2 ${matchup.awayScore! > matchup.homeScore! ? 'font-bold' : 'text-gray-400'}`}>
                           <span className="text-lg font-bold">{matchup.awayScore}</span>
                           <span>{awayTeam?.shortName}</span>
+                          {awayTeam?.record && <span className="text-xs text-gray-500 ml-1">{awayTeam.record}</span>}
                           <span className="text-lg">{awayTeam?.flag}</span>
                         </div>
                       </div>
@@ -246,6 +273,7 @@ export default function ConfidencePool({ tournament, onBack }: ConfidencePoolPro
                       >
                         <span className="text-2xl block">{homeTeam?.flag}</span>
                         <span className="text-sm font-medium block mt-1">{homeTeam?.shortName}</span>
+                        {homeTeam?.record && <span className="text-[10px] text-gray-500 block">{homeTeam.record}</span>}
                       </button>
                       <button
                         onClick={() => handleWinnerPick(matchup.id, matchup.awayTeam)}
@@ -257,6 +285,7 @@ export default function ConfidencePool({ tournament, onBack }: ConfidencePoolPro
                       >
                         <span className="text-2xl block">{awayTeam?.flag}</span>
                         <span className="text-sm font-medium block mt-1">{awayTeam?.shortName}</span>
+                        {awayTeam?.record && <span className="text-[10px] text-gray-500 block">{awayTeam.record}</span>}
                       </button>
                     </div>
 
@@ -424,16 +453,8 @@ export default function ConfidencePool({ tournament, onBack }: ConfidencePoolPro
               <div className="grid grid-cols-2 gap-3">
                 <button
                   onClick={() => {
-                    const upcomingPicks = picks.filter(p => p.winnerId && p.confidence > 0);
-                    if (upcomingPicks.length > 0) {
-                      openConfidenceShareImageInNewTab({
-                        tournament,
-                        weekSchedule: weekSchedule!,
-                        picks: upcomingPicks,
-                        displayName: displayName || 'Anonymous',
-                        totalPoints: upcomingPicks.reduce((sum, p) => sum + p.confidence, 0),
-                        maxPoints: maxPossibleScore(matchupCount),
-                      });
+                    if (getShareImageOptions().picks.length > 0) {
+                      openConfidenceShareImageInNewTab(getShareImageOptions());
                     }
                   }}
                   className="bg-gradient-to-r from-[#ffd700] to-[#ff8c00] text-black font-bold py-3 px-4 rounded-xl hover:scale-105 transition-all"
@@ -442,16 +463,8 @@ export default function ConfidencePool({ tournament, onBack }: ConfidencePoolPro
                 </button>
                 <button
                   onClick={() => {
-                    const upcomingPicks = picks.filter(p => p.winnerId && p.confidence > 0);
-                    if (upcomingPicks.length > 0) {
-                      openConfidenceStoryImageInNewTab({
-                        tournament,
-                        weekSchedule: weekSchedule!,
-                        picks: upcomingPicks,
-                        displayName: displayName || 'Anonymous',
-                        totalPoints: upcomingPicks.reduce((sum, p) => sum + p.confidence, 0),
-                        maxPoints: maxPossibleScore(matchupCount),
-                      });
+                    if (getShareImageOptions().picks.length > 0) {
+                      openConfidenceStoryImageInNewTab(getShareImageOptions());
                     }
                   }}
                   className="bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold py-3 px-4 rounded-xl hover:scale-105 transition-all"
@@ -464,16 +477,8 @@ export default function ConfidencePool({ tournament, onBack }: ConfidencePoolPro
               <div className="grid grid-cols-2 gap-3">
                 <button
                   onClick={() => {
-                    const upcomingPicks = picks.filter(p => p.winnerId && p.confidence > 0);
-                    if (upcomingPicks.length > 0) {
-                      downloadConfidenceShareImage({
-                        tournament,
-                        weekSchedule: weekSchedule!,
-                        picks: upcomingPicks,
-                        displayName: displayName || 'Anonymous',
-                        totalPoints: upcomingPicks.reduce((sum, p) => sum + p.confidence, 0),
-                        maxPoints: maxPossibleScore(matchupCount),
-                      });
+                    if (getShareImageOptions().picks.length > 0) {
+                      downloadConfidenceShareImage(getShareImageOptions());
                     }
                   }}
                   className="bg-[#1a2a44] text-gray-300 font-medium py-2.5 px-4 rounded-xl border border-[#2a3a54] hover:border-[#ffd700]/50 transition-all text-sm"
@@ -482,16 +487,8 @@ export default function ConfidencePool({ tournament, onBack }: ConfidencePoolPro
                 </button>
                 <button
                   onClick={async () => {
-                    const upcomingPicks = picks.filter(p => p.winnerId && p.confidence > 0);
-                    if (upcomingPicks.length > 0) {
-                      const success = await copyConfidenceShareImageToClipboard({
-                        tournament,
-                        weekSchedule: weekSchedule!,
-                        picks: upcomingPicks,
-                        displayName: displayName || 'Anonymous',
-                        totalPoints: upcomingPicks.reduce((sum, p) => sum + p.confidence, 0),
-                        maxPoints: maxPossibleScore(matchupCount),
-                      });
+                    if (getShareImageOptions().picks.length > 0) {
+                      const success = await copyConfidenceShareImageToClipboard(getShareImageOptions());
                       if (!success) alert('Copy failed — try downloading instead');
                     }
                   }}
