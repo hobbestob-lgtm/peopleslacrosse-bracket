@@ -1,0 +1,108 @@
+import { TournamentConfig } from '../types/bracket';
+import { olympicSixes2028 } from './olympic-sixes-2028';
+
+// PLL 2026 Season — 8 teams
+export const pll2026: TournamentConfig = {
+  id: 'pll-2026',
+  name: 'PLL 2026 Season — Bracket Predictions',
+  shortName: 'PLL 2026',
+  year: 2026,
+  slug: 'pll-2026',
+  type: 'pll',
+  status: 'active',
+  startDate: '2026-05-03',
+  endDate: '2026-09-07',
+  groups: [
+    {
+      id: 'east',
+      name: 'East Division',
+      teams: [
+        { id: 'pll-atlas', name: 'New York Atlas', shortName: 'Atlas', flag: '🗽', group: 'east', seed: 3 },
+        { id: 'pll-cannons', name: 'Boston Cannons', shortName: 'Cannons', flag: '💥', group: 'east', seed: 6 },
+        { id: 'pll-waterdogs', name: 'Philadelphia Waterdogs', shortName: 'Waterdogs', flag: '🐕', group: 'east', seed: 7 },
+        { id: 'pll-redwoods', name: 'DC Redwoods', shortName: 'Redwoods', flag: '🌲', group: 'east', seed: 8 },
+      ],
+    },
+    {
+      id: 'west',
+      name: 'West Division',
+      teams: [
+        { id: 'pll-outlaws', name: 'Denver Outlaws', shortName: 'Outlaws', flag: '🐎', group: 'west', seed: 1 },
+        { id: 'pll-archers', name: 'Utah Archers', shortName: 'Archers', flag: '🏹', group: 'west', seed: 2 },
+        { id: 'pll-whipsnakes', name: 'Maryland Whipsnakes', shortName: 'Whipsnakes', flag: '🐍', group: 'west', seed: 4 },
+        { id: 'pll-chaos', name: 'Carolina Chaos', shortName: 'Chaos', flag: '🌪️', group: 'west', seed: 5 },
+      ],
+    },
+  ],
+  knockoutMatches: [
+    { id: 'qf1', round: 'quarterfinal', slot1: { type: 'group_position', groupId: 'east', position: 1 }, slot2: { type: 'group_position', groupId: 'west', position: 4 } },
+    { id: 'qf2', round: 'quarterfinal', slot1: { type: 'group_position', groupId: 'west', position: 1 }, slot2: { type: 'group_position', groupId: 'east', position: 4 } },
+    { id: 'qf3', round: 'quarterfinal', slot1: { type: 'group_position', groupId: 'east', position: 2 }, slot2: { type: 'group_position', groupId: 'west', position: 3 } },
+    { id: 'qf4', round: 'quarterfinal', slot1: { type: 'group_position', groupId: 'west', position: 2 }, slot2: { type: 'group_position', groupId: 'east', position: 3 } },
+    { id: 'sf1', round: 'semifinal', slot1: { type: 'match_winner', matchId: 'qf1' }, slot2: { type: 'match_winner', matchId: 'qf2' } },
+    { id: 'sf2', round: 'semifinal', slot1: { type: 'match_winner', matchId: 'qf3' }, slot2: { type: 'match_winner', matchId: 'qf4' } },
+    { id: 'bronze', round: 'bronze', slot1: { type: 'match_loser', matchId: 'sf1' }, slot2: { type: 'match_loser', matchId: 'sf2' } },
+    { id: 'gold', round: 'gold', slot1: { type: 'match_winner', matchId: 'sf1' }, slot2: { type: 'match_winner', matchId: 'sf2' } },
+  ],
+  scoring: {
+    groupPosition: 1,
+    quarterfinal: 2,
+    semifinal: 4,
+    bronze: 3,
+    gold: 8,
+    upsetBonusPercent: 50,
+  },
+};
+
+// WLL 2026 Inaugural Season — 4 teams
+export const wll2026: TournamentConfig = {
+  id: 'wll-2026',
+  name: 'WLL 2026 Inaugural Season — Bracket Predictions',
+  shortName: 'WLL 2026',
+  year: 2026,
+  slug: 'wll-2026',
+  type: 'pll',
+  status: 'active',
+  startDate: '2026-05-16',
+  endDate: '2026-08-15',
+  groups: [
+    {
+      id: 'wll',
+      name: 'WLL Teams',
+      teams: [
+        { id: 'wll-guard', name: 'Boston Guard', shortName: 'Guard', flag: '🛡️', group: 'wll', seed: 1 },
+        { id: 'wll-charging', name: 'New York Charging', shortName: 'Charging', flag: '⚡', group: 'wll', seed: 2 },
+        { id: 'wll-charm', name: 'Maryland Charm', shortName: 'Charm', flag: '🦀', group: 'wll', seed: 3 },
+        { id: 'wll-palms', name: 'California Palms', shortName: 'Palms', flag: '🌴', group: 'wll', seed: 4 },
+      ],
+    },
+  ],
+  knockoutMatches: [
+    { id: 'wll-sf1', round: 'semifinal', slot1: { type: 'group_position', groupId: 'wll', position: 1 }, slot2: { type: 'group_position', groupId: 'wll', position: 4 } },
+    { id: 'wll-sf2', round: 'semifinal', slot1: { type: 'group_position', groupId: 'wll', position: 2 }, slot2: { type: 'group_position', groupId: 'wll', position: 3 } },
+    { id: 'wll-bronze', round: 'bronze', slot1: { type: 'match_loser', matchId: 'wll-sf1' }, slot2: { type: 'match_loser', matchId: 'wll-sf2' } },
+    { id: 'wll-gold', round: 'gold', slot1: { type: 'match_winner', matchId: 'wll-sf1' }, slot2: { type: 'match_winner', matchId: 'wll-sf2' } },
+  ],
+  scoring: {
+    groupPosition: 1,
+    quarterfinal: 0,
+    semifinal: 3,
+    bronze: 2,
+    gold: 5,
+    upsetBonusPercent: 50,
+  },
+};
+
+export const tournaments: Record<string, TournamentConfig> = {
+  'olympic-sixes-2028': olympicSixes2028,
+  'pll-2026': pll2026,
+  'wll-2026': wll2026,
+};
+
+export function getTournament(slug: string): TournamentConfig | undefined {
+  return tournaments[slug] || Object.values(tournaments).find(t => t.slug === slug);
+}
+
+export function getAllTournaments(): TournamentConfig[] {
+  return Object.values(tournaments);
+}

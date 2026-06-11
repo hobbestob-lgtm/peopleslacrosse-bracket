@@ -99,15 +99,4 @@ export const olympicSixes2028: TournamentConfig = {
   },
 };
 
-// Registry — add more tournaments here
-export const tournaments: Record<string, TournamentConfig> = {
-  'olympic-sixes-2028': olympicSixes2028,
-};
-
-export function getTournament(slug: string): TournamentConfig | undefined {
-  return Object.values(tournaments).find(t => t.slug === slug);
-}
-
-export function getAllTournaments(): TournamentConfig[] {
-  return Object.values(tournaments);
-}
+// Registry moved to index.ts

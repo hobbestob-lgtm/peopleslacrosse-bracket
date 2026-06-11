@@ -8,11 +8,12 @@ import { downloadShareImage, copyShareImageToClipboard } from '@/lib/share-image
 
 interface BracketPredictorProps {
   tournament: TournamentConfig;
+  onBack?: () => void;
 }
 
 type Step = 'groups' | 'quarterfinals' | 'semifinals' | 'medals' | 'review';
 
-export default function BracketPredictor({ tournament }: BracketPredictorProps) {
+export default function BracketPredictor({ tournament, onBack }: BracketPredictorProps) {
   const [step, setStep] = useState<Step>('groups');
   const [groupPicks, setGroupPicks] = useState<GroupPick[]>(
     tournament.groups.map(g => ({ groupId: g.id, positions: g.teams.map(t => t.id) }))
@@ -224,6 +225,12 @@ export default function BracketPredictor({ tournament }: BracketPredictorProps) 
     <div className="min-h-screen bg-gradient-to-b from-[#0a1628] via-[#0f2035] to-[#0a1628] text-white">
       {/* Header */}
       <div className="max-w-4xl mx-auto px-4 pt-8 pb-4">
+        {/* Back button */}
+        {onBack && (
+          <button onClick={onBack} className="text-gray-400 hover:text-white transition-colors mb-4 flex items-center gap-1 text-sm">
+            ← All Tournaments
+          </button>
+        )}
         <div className="text-center mb-2">
           <h1 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-[#ffd700] to-[#ff8c00] bg-clip-text text-transparent">
             🥍 {tournament.shortName}
