@@ -4,7 +4,8 @@ export interface Team {
   id: string;
   name: string;
   shortName: string;
-  flag: string; // Emoji flag or abbreviation
+  flag: string; // Emoji flag or abbreviation (used in share images)
+  lucideIcon?: string; // Lucide icon name for UI rendering (PLL/WLL teams)
   group: string; // Group letter
   seed?: number;
   record?: string; // e.g. '3-2'

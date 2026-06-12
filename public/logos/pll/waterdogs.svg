@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 130" fill="none">
+  <!-- Waterdogs: Pear-shaped lacrosse head (narrow at bottom) with ball -->
+  <path d="M50 4 C30 4 16 20 16 40 L16 72 C16 86 28 100 36 106 L36 114 C36 118 42 122 50 122 C58 122 64 118 64 114 L64 106 C72 100 84 86 84 72 L84 40 C84 20 70 4 50 4Z" 
+        stroke="#007DC3" stroke-width="3" fill="#007DC3" fill-opacity="0.06"/>
+  <path d="M18 14 C22 7 34 3 50 3 C66 3 78 7 82 14" 
+        stroke="#007DC3" stroke-width="5" fill="none" stroke-linecap="round"/>
+  <path d="M16 30 L16 70" stroke="#007DC3" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M84 30 L84 70" stroke="#007DC3" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M36 108 C40 100 45 96 50 96 C55 96 60 100 64 108" 
+        stroke="#007DC3" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  <path d="M26 30 L50 24 L74 30" stroke="#F58220" stroke-width="1.5" stroke-linecap="round" opacity="0.5"/>
+  <path d="M28 34 L50 28 L72 34" stroke="#F58220" stroke-width="1" stroke-linecap="round" opacity="0.35"/>
+  <path d="M24 40 L50 36 L76 40" stroke="#007DC3" stroke-width="1" stroke-linecap="round" opacity="0.25"/>
+  <path d="M22 50 L50 46 L78 50" stroke="#007DC3" stroke-width="1" stroke-linecap="round" opacity="0.25"/>
+  <path d="M24 60 L50 56 L76 60" stroke="#007DC3" stroke-width="1" stroke-linecap="round" opacity="0.25"/>
+  <path d="M28 70 L50 66 L72 70" stroke="#007DC3" stroke-width="1" stroke-linecap="round" opacity="0.25"/>
+  <path d="M32 80 L50 76 L68 80" stroke="#007DC3" stroke-width="1" stroke-linecap="round" opacity="0.2"/>
+  <path d="M36 90 L50 86 L64 90" stroke="#007DC3" stroke-width="1" stroke-linecap="round" opacity="0.15"/>
+  <circle cx="50" cy="52" r="14" fill="#F58220" fill-opacity="0.12"/>
+  <circle cx="50" cy="52" r="14" stroke="#F58220" stroke-width="2.5"/>
+  <ellipse cx="45" cy="47" rx="5" ry="3.5" fill="white" opacity="0.5"/>
+</svg>

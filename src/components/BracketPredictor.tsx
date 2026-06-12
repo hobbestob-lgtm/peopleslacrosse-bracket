@@ -3,18 +3,44 @@
 import { useState, useCallback } from 'react';
 import { BracketPick, TournamentConfig, Team, GroupPick, KnockoutPick } from '@/types/bracket';
 import { resolveKnockoutMatchTeams } from '@/lib/bracket-engine';
+import { Award, Trophy, ClipboardList, ClipboardCopy, CheckCircle, Link, Users, Share2, ExternalLink, Image as ImageIcon } from 'lucide-react';
+import { LacrosseStick } from '@/components/CustomIcons';
+import TeamIcon from '@/components/TeamIcon';
 import { createBracket, collectEmail } from '@/lib/storage';
-import { downloadShareImage, copyShareImageToClipboard } from '@/lib/share-image';
+import { downloadShareImage, copyShareImageToClipboard, generateShareImage } from '@/lib/share-image';
 import CommunityStats from '@/components/CommunityStats';
+
+// Helper to render team record badge (on its own line below team name)
+function recordBadge(record?: string) {
+  if (!record) return null;
+  const [w, l] = record.split('-').map(Number);
+  const color = w > l ? 'bg-[#4ade80]/20 text-[#4ade80]' : w < l ? 'bg-red-500/20 text-red-400' : 'bg-gray-500/20 text-gray-400';
+  return <span className={`block text-xs px-1.5 py-0.5 rounded w-fit ${color}`}>{record}</span>;
+}
+
+// Helper to render team name with record on next line
+function teamNameWithRecord(name: string, record?: string, shortName?: string) {
+  const displayName = shortName || name;
+  if (!record) return <span className="font-medium">{displayName}</span>;
+  const [w, l] = record.split('-').map(Number);
+  const color = w > l ? 'bg-[#4ade80]/20 text-[#4ade80]' : w < l ? 'bg-red-500/20 text-red-400' : 'bg-gray-500/20 text-gray-400';
+  return (
+    <span className="flex flex-col leading-tight">
+      <span className="font-medium">{displayName}</span>
+      <span className={`text-xs px-1.5 py-0.5 rounded w-fit ${color}`}>{record}</span>
+    </span>
+  );
+}
 
 interface BracketPredictorProps {
   tournament: TournamentConfig;
   onBack?: () => void;
+  groupInvite?: { id: string; name: string; inviteCode: string; tournamentId: string; memberCount: number } | null;
 }
 
 type Step = 'groups' | 'quarterfinals' | 'semifinals' | 'medals' | 'review';
 
-export default function BracketPredictor({ tournament, onBack }: BracketPredictorProps) {
+export default function BracketPredictor({ tournament, onBack, groupInvite }: BracketPredictorProps) {
   const [step, setStep] = useState<Step>('groups');
   const [groupPicks, setGroupPicks] = useState<GroupPick[]>(
     tournament.groups.map(g => ({ groupId: g.id, positions: g.teams.map(t => t.id) }))
@@ -23,9 +49,40 @@ export default function BracketPredictor({ tournament, onBack }: BracketPredicto
   const [email, setEmail] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [saving, setSaving] = useState(false);
+
+  const isValidEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
   const [saved, setSaved] = useState(false);
   const [bracketId, setBracketId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
+  const [groupCopied, setGroupCopied] = useState(false);
+
+  // Clipboard helper with fallback
+  const copyToClipboard = async (text: string): Promise<boolean> => {
+    try {
+      // Ensure window is focused (iOS Safari sometimes loses focus)
+      window.focus();
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        return true;
+      }
+      // Fallback for insecure contexts or older browsers
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.style.position = 'fixed';
+      textarea.style.left = '-9999px';
+      textarea.style.top = '-9999px';
+      textarea.setAttribute('readonly', '');
+      document.body.appendChild(textarea);
+      textarea.select();
+      textarea.setSelectionRange(0, text.length);
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+      return true;
+    } catch {
+      return false;
+    }
+  };
   const [joinGroupCode, setJoinGroupCode] = useState('');
   const [joinedGroup, setJoinedGroup] = useState<{id: string; name: string; inviteCode: string} | null>(null);
   const [joinError, setJoinError] = useState('');
@@ -91,7 +148,7 @@ export default function BracketPredictor({ tournament, onBack }: BracketPredicto
 
   // Save bracket
   const saveBracket = useCallback(async () => {
-    if (!email) return;
+    if (!email || !isValidEmail(email)) return;
     setSaving(true);
     try {
       // Save to D1 via API
@@ -108,7 +165,7 @@ export default function BracketPredictor({ tournament, onBack }: BracketPredicto
         }),
       });
       const data: any = await res.json();
-      
+
       if (data.success) {
         setBracketId(data.bracketId);
         setSaved(true);
@@ -125,9 +182,8 @@ export default function BracketPredictor({ tournament, onBack }: BracketPredicto
             bracketId: data.bracketId,
           }),
         });
-        // Auto-join group if invite code in URL
-        const urlParams = new URLSearchParams(window.location.search);
-        const inviteCode = urlParams.get('group');
+        // Auto-join group if invite code available
+        const inviteCode = groupInvite?.inviteCode || new URLSearchParams(window.location.search).get('group');
         if (inviteCode) {
           try {
             const joinRes = await fetch('/api/groups/join', {
@@ -226,15 +282,16 @@ export default function BracketPredictor({ tournament, onBack }: BracketPredicto
     <div className="min-h-screen bg-gradient-to-b from-[#0a1628] via-[#0f2035] to-[#0a1628] text-white">
       {/* Header */}
       <div className="max-w-4xl mx-auto px-4 pt-8 pb-4">
-        {/* Back button */}
-        {onBack && (
-          <button onClick={onBack} className="text-gray-400 hover:text-white transition-colors mb-4 flex items-center gap-1 text-sm">
-            ← All Tournaments
-          </button>
-        )}
         <div className="text-center mb-2">
+          <a href="https://peopleslacrosse.com" target="_blank" rel="noopener noreferrer">
+            <img
+              src="/pl-logo-gold.png"
+              alt="People's Lacrosse"
+              className="h-14 mx-auto mb-2 hover:opacity-80 transition-opacity cursor-pointer"
+            />
+          </a>
           <h1 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-[#ffd700] to-[#ff8c00] bg-clip-text text-transparent">
-            🥍 {tournament.shortName}
+            {tournament.shortName}
           </h1>
           <p className="text-gray-400 mt-1">Bracket Predictor</p>
         </div>
@@ -333,6 +390,10 @@ export default function BracketPredictor({ tournament, onBack }: BracketPredicto
             onBack={() => setStep('medals')}
             copied={copied}
             setCopied={setCopied}
+            linkCopied={linkCopied}
+            setLinkCopied={setLinkCopied}
+            groupCopied={groupCopied}
+            setGroupCopied={setGroupCopied}
             joinGroupCode={joinGroupCode}
             setJoinGroupCode={setJoinGroupCode}
             joinedGroup={joinedGroup}
@@ -347,6 +408,9 @@ export default function BracketPredictor({ tournament, onBack }: BracketPredicto
             imageDownloading={imageDownloading}
             setImageDownloading={setImageDownloading}
             shareUrl={bracketId ? `${window.location.origin}/bracket?id=${bracketId}` : ''}
+            groupInvite={groupInvite}
+            copyToClipboard={copyToClipboard}
+            isValidEmail={isValidEmail}
           />
         )}
       </div>
@@ -374,7 +438,7 @@ function GroupStage({
 
   return (
     <div>
-      <h2 className="text-xl font-bold mb-4 text-[#ffd700]">🥍 Rank teams in each group</h2>
+      <h2 className="text-xl font-bold mb-4 text-[#ffd700] flex items-center gap-2"><LacrosseStick className="w-5 h-5" /> Rank teams in each group</h2>
       <p className="text-gray-400 mb-6 text-sm">
         Drag or use arrows to rank teams 1st through 4th. 1st and 2nd advance to knockouts.
       </p>
@@ -403,8 +467,8 @@ function GroupStage({
                       }`}>
                         {index + 1}
                       </span>
-                      <span className="text-2xl">{team.flag}</span>
-                      <span className="flex-1 font-medium">{team.name}</span>
+                      <TeamIcon team={team} size={24} />
+                      <span className="flex-1">{team.name}{recordBadge(team.record)}</span>
                       {isAdvancing && (
                         <span className="text-xs bg-[#4ade80]/20 text-[#4ade80] px-2 py-0.5 rounded-full">
                           Advances
@@ -478,7 +542,7 @@ function KnockoutRound({
   return (
     <div>
       <h2 className="text-xl font-bold mb-4 text-[#ffd700]">
-        {round === 'quarterfinal' ? '🏅' : '🏆'} Pick {roundName} Winners
+        {round === 'quarterfinal' ? <Award className="w-5 h-5 inline" /> : <Trophy className="w-5 h-5 inline" />} Pick {roundName} Winners
       </h2>
 
       <div className="space-y-4">
@@ -502,8 +566,8 @@ function KnockoutRound({
                         : 'border-[#2a3a54] hover:border-[#ffd700]/50'
                     }`}
                   >
-                    <span className="text-2xl mr-2">{team1.flag}</span>
-                    <span className="font-bold">{team1.name}</span>
+                    <TeamIcon team={team1} size={24} className="mr-2" />
+                    <span>{teamNameWithRecord(team1.name, team1.record, team1.shortName)}</span>
                   </button>
                   <span className="text-gray-500 font-bold">VS</span>
                   <button
@@ -514,8 +578,8 @@ function KnockoutRound({
                         : 'border-[#2a3a54] hover:border-[#ffd700]/50'
                     }`}
                   >
-                    <span className="text-2xl mr-2">{team2.flag}</span>
-                    <span className="font-bold">{team2.name}</span>
+                    <TeamIcon team={team2} size={24} className="mr-2" />
+                    <span>{teamNameWithRecord(team2.name, team2.record, team2.shortName)}</span>
                   </button>
                 </div>
               ) : (
@@ -576,7 +640,7 @@ function MedalRound({
 
   return (
     <div>
-      <h2 className="text-xl font-bold mb-4 text-[#ffd700]">🏅🥇 Pick Medal Winners</h2>
+      <h2 className="text-xl font-bold mb-4 text-[#ffd700] flex items-center gap-2"><Award className="w-5 h-5" /> Pick Medal Winners</h2>
 
       {/* Gold medal match */}
       <div className="bg-[#1a2a44] rounded-xl p-5 border-2 border-[#ffd700]/30 mb-6">
@@ -593,8 +657,8 @@ function MedalRound({
                   : 'border-[#2a3a54] hover:border-[#ffd700]/50'
               }`}
             >
-              <span className="text-3xl block mb-1">{goldTeams.team1!.flag}</span>
-              <span className="font-bold">{goldTeams.team1!.name}</span>
+              <span className="text-3xl block mb-1"><TeamIcon team={goldTeams.team1!} size={32} /></span>
+              <span>{teamNameWithRecord(goldTeams.team1!.name, goldTeams.team1!.record, goldTeams.team1!.shortName)}</span>
             </button>
             <span className="text-[#ffd700] font-bold text-xl">VS</span>
             <button
@@ -605,8 +669,8 @@ function MedalRound({
                   : 'border-[#2a3a54] hover:border-[#ffd700]/50'
               }`}
             >
-              <span className="text-3xl block mb-1">{goldTeams.team2!.flag}</span>
-              <span className="font-bold">{goldTeams.team2!.name}</span>
+              <span className="text-3xl block mb-1"><TeamIcon team={goldTeams.team2!} size={32} /></span>
+              <span>{teamNameWithRecord(goldTeams.team2!.name, goldTeams.team2!.record, goldTeams.team2!.shortName)}</span>
             </button>
           </div>
         ) : (
@@ -631,8 +695,8 @@ function MedalRound({
                   : 'border-[#2a3a54] hover:border-[#cd7f32]/50'
               }`}
             >
-              <span className="text-2xl block mb-1">{bronzeTeams.team1!.flag}</span>
-              <span className="font-bold">{bronzeTeams.team1!.name}</span>
+              <span className="text-2xl block mb-1"><TeamIcon team={bronzeTeams.team1!} size={24} /></span>
+              <span>{teamNameWithRecord(bronzeTeams.team1!.name, bronzeTeams.team1!.record, bronzeTeams.team1!.shortName)}</span>
             </button>
             <span className="text-[#cd7f32] font-bold text-xl">VS</span>
             <button
@@ -643,8 +707,8 @@ function MedalRound({
                   : 'border-[#2a3a54] hover:border-[#cd7f32]/50'
               }`}
             >
-              <span className="text-2xl block mb-1">{bronzeTeams.team2!.flag}</span>
-              <span className="font-bold">{bronzeTeams.team2!.name}</span>
+              <span className="text-2xl block mb-1"><TeamIcon team={bronzeTeams.team2!} size={24} /></span>
+              <span>{teamNameWithRecord(bronzeTeams.team2!.name, bronzeTeams.team2!.record, bronzeTeams.team2!.shortName)}</span>
             </button>
           </div>
         ) : (
@@ -658,8 +722,8 @@ function MedalRound({
       {championTeam && (
         <div className="text-center mb-6 p-4 bg-gradient-to-r from-[#ffd700]/10 to-[#ff8c00]/10 rounded-xl border border-[#ffd700]/30">
           <p className="text-sm text-gray-400">Your predicted champion:</p>
-          <p className="text-3xl mt-1">{championTeam.flag}</p>
-          <p className="text-xl font-bold text-[#ffd700]">{championTeam.name}</p>
+          <p className="text-3xl mt-1"><TeamIcon team={championTeam} size={32} /></p>
+          <p className="text-xl font-bold text-[#ffd700] flex flex-col items-center"><span>{championTeam.name}</span>{championTeam.record && <span className="text-sm text-gray-400">({championTeam.record})</span>}</p>
         </div>
       )}
 
@@ -699,6 +763,10 @@ function ReviewSave({
   onBack,
   copied,
   setCopied,
+  linkCopied,
+  setLinkCopied,
+  groupCopied,
+  setGroupCopied,
   joinGroupCode,
   setJoinGroupCode,
   joinedGroup,
@@ -713,6 +781,9 @@ function ReviewSave({
   imageDownloading,
   setImageDownloading,
   shareUrl,
+  groupInvite,
+  copyToClipboard,
+  isValidEmail,
 }: {
   tournament: TournamentConfig;
   groupPicks: GroupPick[];
@@ -730,6 +801,10 @@ function ReviewSave({
   onBack: () => void;
   copied: boolean;
   setCopied: (v: boolean) => void;
+  linkCopied: boolean;
+  setLinkCopied: (v: boolean) => void;
+  groupCopied: boolean;
+  setGroupCopied: (v: boolean) => void;
   joinGroupCode: string;
   setJoinGroupCode: (v: string) => void;
   joinedGroup: { id: string; name: string; inviteCode: string } | null;
@@ -744,6 +819,9 @@ function ReviewSave({
   imageDownloading: boolean;
   setImageDownloading: (v: boolean) => void;
   shareUrl: string;
+  groupInvite?: { id: string; name: string; inviteCode: string; tournamentId: string; memberCount: number } | null;
+  copyToClipboard: (text: string) => Promise<boolean>;
+  isValidEmail: (email: string) => boolean;
 }) {
   // Build a summary of all picks
   const champion = knockoutPicks.find(kp => kp.matchId === 'gold')
@@ -775,7 +853,11 @@ function ReviewSave({
 
   const handleCopyImage = async () => {
     try {
-      const ok = await copyShareImageToClipboard({
+      // Ensure window is focused (iOS Safari sometimes loses focus)
+      window.focus();
+
+      // Generate the image first, THEN try clipboard copy
+      const blob = await generateShareImage({
         tournament,
         groupPicks,
         knockoutPicks,
@@ -783,36 +865,124 @@ function ReviewSave({
         bronzeTeam: bronze ?? null,
         displayName: displayName || email.split('@')[0],
       });
-      if (ok) {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
+
+      // Try ClipboardItem (modern browsers, needs user gesture)
+      // Must check for ClipboardItem API availability first
+      if (typeof ClipboardItem !== 'undefined' && navigator.clipboard?.write) {
+        try {
+          await navigator.clipboard.write([
+            new ClipboardItem({ 'image/png': blob }),
+          ]);
+          setCopied(true);
+          setTimeout(() => setCopied(false), 2000);
+          return;
+        } catch {
+          // ClipboardItem failed (e.g., user gesture expired) — fall through to download
+        }
       }
+
+      // Fallback: download the image
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `lacrosse-bracket-${tournament.slug}.png`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
     } catch (e) {
       console.error('Copy image error:', e);
+      await handleDownloadImage();
+    }
+  };
+
+  const handleViewImage = async () => {
+    try {
+      setImageDownloading(true);
+      const blob = await generateShareImage({
+        tournament,
+        groupPicks,
+        knockoutPicks,
+        championTeam: champion ?? null,
+        bronzeTeam: bronze ?? null,
+        displayName: displayName || email.split('@')[0],
+      });
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank');
+      // Revoke after a delay so the new tab can load it
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (e) {
+      console.error('View image error:', e);
+    } finally {
+      setImageDownloading(false);
     }
   };
 
   return (
     <div>
-      <h2 className="text-xl font-bold mb-4 text-[#ffd700]">📋 Review Your Bracket</h2>
+      <h2 className="text-xl font-bold mb-5 text-[#ffd700] flex items-center gap-2"><ClipboardList className="w-5 h-5" /> Review Your Bracket</h2>
 
-      {/* Group summary */}
-      {tournament.groups.map(group => {
-        const gp = groupPicks.find(p => p.groupId === group.id)!;
+      {/* ── Group Stage Section ── */}
+      <div className="mb-5">
+        <div className="flex items-center gap-2 mb-3">
+          <div className="h-px flex-1 bg-[#2a3a54]" />
+          <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Group Stage</h3>
+          <div className="h-px flex-1 bg-[#2a3a54]" />
+        </div>
+        {tournament.groups.map(group => {
+          const gp = groupPicks.find(p => p.groupId === group.id)!;
+          return (
+            <div key={group.id} className="bg-[#1a2a44] rounded-xl p-4 border border-[#2a3a54] mb-2">
+              <h4 className="font-bold text-[#ffd700] mb-2 text-sm">{group.name}</h4>
+              <div className="space-y-1.5">
+                {gp.positions.map((teamId, i) => {
+                  const team = getTeam(teamId)!;
+                  return (
+                    <div key={teamId} className={`flex items-center gap-2.5 text-sm py-1 px-2 rounded-lg ${i < 2 ? 'bg-[#4ade80]/5' : ''}`}>
+                      <span className={`font-bold w-5 ${i < 2 ? 'text-[#4ade80]' : 'text-gray-600'}`}>
+                        {i + 1}.
+                      </span>
+                      <TeamIcon team={team} size={18} />
+                      <span className={`flex-1 flex flex-col leading-tight ${i < 2 ? 'text-white' : 'text-gray-400'}`}>
+                        <span>{team.name}</span>
+                        {recordBadge(team.record)}
+                      </span>
+                      {i < 2 && <span className="text-[#4ade80] text-xs ml-auto font-medium">✓ Advances</span>}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* ── Knockout Rounds Section ── */}
+      {['quarterfinal', 'semifinal'].map(round => {
+        const matches = tournament.knockoutMatches.filter(m => m.round === round);
+        const roundName = round === 'quarterfinal' ? 'Quarterfinals' : 'Semifinals';
         return (
-          <div key={group.id} className="bg-[#1a2a44] rounded-xl p-4 border border-[#2a3a54] mb-3">
-            <h3 className="font-bold text-[#ffd700] mb-2">{group.name}</h3>
-            <div className="space-y-1">
-              {gp.positions.map((teamId, i) => {
-                const team = getTeam(teamId)!;
+          <div key={round} className="mb-5">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="h-px flex-1 bg-[#2a3a54]" />
+              <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">{roundName}</h3>
+              <div className="h-px flex-1 bg-[#2a3a54]" />
+            </div>
+            <div className="space-y-2">
+              {matches.map(match => {
+                const pick = knockoutPicks.find(kp => kp.matchId === match.id);
+                const teams = resolvedMatches[match.id];
                 return (
-                  <div key={teamId} className="flex items-center gap-2 text-sm">
-                    <span className={`font-bold w-5 ${i < 2 ? 'text-[#4ade80]' : 'text-gray-500'}`}>
-                      {i + 1}.
-                    </span>
-                    <span>{team.flag}</span>
-                    <span>{team.name}</span>
-                    {i < 2 && <span className="text-[#4ade80] text-xs">✓ Advances</span>}
+                  <div key={match.id} className="bg-[#1a2a44] rounded-lg px-4 py-2.5 border border-[#2a3a54] flex items-center gap-2 text-sm">
+                    <span className="text-gray-600 text-xs w-10 shrink-0">{match.id.toUpperCase()}</span>
+                    {teams?.team1 && <TeamIcon team={teams.team1} size={16} />}
+                    <span className="text-gray-500">vs</span>
+                    {teams?.team2 && <TeamIcon team={teams.team2} size={16} />}
+                    {pick && (
+                      <span className="text-[#ffd700] font-bold ml-auto flex items-center gap-1.5">
+                        → <TeamIcon team={getTeam(pick.winnerId)!} size={16} /> {teamNameWithRecord(getTeam(pick.winnerId)?.name || '', getTeam(pick.winnerId)?.record, getTeam(pick.winnerId)?.shortName)}
+                      </span>
+                    )}
                   </div>
                 );
               })}
@@ -821,54 +991,95 @@ function ReviewSave({
         );
       })}
 
-      {/* Knockout summary */}
-      {['quarterfinal', 'semifinal'].map(round => {
-        const matches = tournament.knockoutMatches.filter(m => m.round === round);
-        const roundName = round === 'quarterfinal' ? 'Quarterfinals' : 'Semifinals';
-        return (
-          <div key={round} className="mb-3">
-            <h3 className="font-bold text-[#ffd700] mb-2">{roundName}</h3>
-            {matches.map(match => {
-              const pick = knockoutPicks.find(kp => kp.matchId === match.id);
-              const teams = resolvedMatches[match.id];
-              return (
-                <div key={match.id} className="flex items-center gap-2 text-sm mb-1 ml-4">
-                  <span className="text-gray-500">{match.id.toUpperCase()}:</span>
-                  {teams?.team1 && <span>{teams.team1.flag}</span>}
-                  <span className="text-gray-500">vs</span>
-                  {teams?.team2 && <span>{teams.team2.flag}</span>}
-                  {pick && (
-                    <span className="text-[#ffd700] font-bold">
-                      → {getTeam(pick.winnerId)?.flag} {getTeam(pick.winnerId)?.name}
-                    </span>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        );
-      })}
+      {/* ── Medal Picks Section ── */}
+      <div className="mb-6">
+        <div className="flex items-center gap-2 mb-3">
+          <div className="h-px flex-1 bg-[#2a3a54]" />
+          <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Medal Picks</h3>
+          <div className="h-px flex-1 bg-[#2a3a54]" />
+        </div>
+        <div className="bg-gradient-to-b from-[#ffd700]/8 to-transparent rounded-xl p-4 border border-[#ffd700]/20">
+          {champion && (
+            <div className="text-center mb-3">
+              <span className="text-3xl"><TeamIcon team={champion} size={28} /></span>
+              <p className="text-lg font-bold text-[#ffd700]">🥇 <span className="flex flex-col leading-tight"><span>{champion.shortName || champion.name}</span>{champion.record && <span className="text-sm text-gray-400">({champion.record})</span>}</span></p>
+            </div>
+          )}
+          {champion && bronze && <div className="h-px bg-[#cd7f32]/20 my-2" />}
+          {bronze && (
+            <div className="text-center">
+              <span className="text-2xl"><TeamIcon team={bronze} size={22} /></span>
+              <p className="text-sm font-bold text-[#cd7f32]">🥉 <span className="flex flex-col leading-tight"><span>{bronze.shortName || bronze.name}</span>{bronze.record && <span className="text-xs text-gray-400">({bronze.record})</span>}</span></p>
+            </div>
+          )}
+        </div>
+      </div>
 
-      {/* Medal summary */}
-      <div className="bg-[#1a2a44] rounded-xl p-4 border border-[#ffd700]/30 mb-6">
-        {champion && (
-          <div className="text-center mb-2">
-            <span className="text-3xl">{champion.flag}</span>
-            <p className="text-lg font-bold text-[#ffd700]">🥇 {champion.name}</p>
+      {/* ── Share Image (always available — no email needed) ── */}
+      <div className="flex items-center gap-2 my-2">
+        <div className="h-px flex-1 bg-[#2a3a54]" />
+        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Share</span>
+        <div className="h-px flex-1 bg-[#2a3a54]" />
+      </div>
+
+      <div className="bg-[#1a2a44] rounded-xl p-5 border border-[#2a3a54]">
+        <h3 className="font-bold text-lg mb-3">📱 Save & Share Your Bracket</h3>
+        <div className="flex gap-3 flex-wrap">
+          <button
+            onClick={handleViewImage}
+            disabled={imageDownloading}
+            className="bg-[#ffd700] hover:bg-[#ffcc00] disabled:bg-gray-600 text-black font-bold py-3 px-5 rounded-xl transition-all flex items-center gap-2"
+          >
+            {imageDownloading ? '⏳ Generating...' : '🔍 View Image'}
+          </button>
+          <button
+            onClick={handleDownloadImage}
+            disabled={imageDownloading}
+            className="bg-[#1a2a44] hover:bg-[#2a3a54] text-white font-bold py-3 px-5 rounded-xl border border-[#2a3a54] transition-all flex items-center gap-2"
+          >
+            📥 Download
+          </button>
+          <button
+            onClick={handleCopyImage}
+            className="bg-[#1a2a44] hover:bg-[#2a3a54] text-white font-bold py-3 px-5 rounded-xl border border-[#2a3a54] transition-all flex items-center gap-2"
+          >
+            {copied ? <span className="flex items-center gap-1"><CheckCircle className="w-4 h-4" /> Copied!</span> : <span className="flex items-center gap-1"><ClipboardCopy className="w-4 h-4" /> Copy Image</span>}
+          </button>
+        </div>
+        <p className="text-xs text-gray-500 mt-2">💡 <strong>Best on mobile:</strong> Tap "View Image" → long-press the image → Save to Photos or Download.</p>
+
+        {/* Social share — image-based platforms (no link needed) */}
+        <div className="mt-4 pt-4 border-t border-[#2a3a54]">
+          <p className="text-sm text-gray-400 mb-3">Share your bracket image on social</p>
+          <div className="flex gap-3 flex-wrap">
+            <a
+              href="https://www.instagram.com/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="bg-gradient-to-br from-purple-600 via-pink-500 to-orange-400 hover:from-purple-700 hover:via-pink-600 hover:to-orange-500 text-white font-bold py-2.5 px-5 rounded-xl transition-all flex items-center gap-2"
+            >
+              <svg viewBox="0 0 24 24" className="w-4 h-4 fill-white"><rect x="2" y="2" width="20" height="20" rx="5" ry="5" fill="none" stroke="white" strokeWidth="2"/><circle cx="12" cy="12" r="5" fill="none" stroke="white" strokeWidth="2"/><circle cx="17.5" cy="6.5" r="1.5" fill="white"/></svg>
+              Instagram Story
+            </a>
+            <a
+              href="https://www.tiktok.com/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="bg-[#010101] hover:bg-gray-800 text-white font-bold py-2.5 px-5 rounded-xl transition-all flex items-center gap-2 border border-gray-700"
+            >
+              <svg viewBox="0 0 24 24" className="w-4 h-4 fill-white"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1v-3.5a6.37 6.37 0 00-.79-.05A6.34 6.34 0 003.15 15.2a6.34 6.34 0 0010.86 4.46V13a8.28 8.28 0 005.58 2.17V11.7a4.83 4.83 0 01-3.77-1.64z"/></svg>
+              TikTok
+            </a>
           </div>
-        )}
-        {bronze && (
-          <div className="text-center">
-            <span className="text-2xl">{bronze.flag}</span>
-            <p className="text-sm font-bold text-[#cd7f32]">🥉 {bronze.name}</p>
-          </div>
-        )}
+          <p className="text-xs text-gray-500 mt-2">💡 Tip: Save your bracket image first, then share it on Instagram or TikTok!</p>
+        </div>
       </div>
 
       {/* Save form */}
       {!saved ? (
         <div className="bg-[#1a2a44] rounded-xl p-6 border border-[#2a3a54]">
-          <h3 className="font-bold text-lg mb-4">Save Your Bracket</h3>
+          <h3 className="font-bold text-lg mb-2">💾 Save Your Bracket</h3>
+          <p className="text-sm text-gray-400 mb-4">Save to get a shareable link, edit later, and create or join groups.</p>
           <div className="space-y-4">
             <div>
               <label className="block text-sm text-gray-400 mb-1">Email *</label>
@@ -877,9 +1088,15 @@ function ReviewSave({
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com"
-                className="w-full bg-[#0a1628] border border-[#2a3a54] rounded-lg px-4 py-2 text-white focus:border-[#ffd700] focus:outline-none"
+                className={`w-full bg-[#0a1628] border rounded-lg px-4 py-2 text-white focus:outline-none ${email && !isValidEmail(email) ? 'border-red-500/60 focus:border-red-400' : 'border-[#2a3a54] focus:border-[#ffd700]'}`}
               />
-              <p className="text-xs text-gray-500 mt-1">We'll send you a link to edit your bracket</p>
+              {email && !isValidEmail(email) ? (
+                <p className="text-xs text-red-400 mt-1">Please enter a valid email address</p>
+              ) : groupInvite ? (
+                <p className="text-xs text-[#4ade80] mt-1">Required to join "{groupInvite.name}"</p>
+              ) : (
+                <p className="text-xs text-gray-500 mt-1">We'll send you a link to edit your bracket</p>
+              )}
             </div>
             <div>
               <label className="block text-sm text-gray-400 mb-1">Display Name</label>
@@ -902,7 +1119,7 @@ function ReviewSave({
             </button>
             <button
               onClick={onSave}
-              disabled={saving || !email}
+              disabled={saving || !email || !isValidEmail(email)}
               className="bg-[#ffd700] hover:bg-[#ffcc00] disabled:bg-gray-600 disabled:cursor-not-allowed text-black font-bold py-3 px-8 rounded-xl text-lg transition-all hover:scale-105 disabled:hover:scale-100"
             >
               {saving ? 'Saving...' : '💾 Save Bracket'}
@@ -913,60 +1130,50 @@ function ReviewSave({
         <div className="space-y-4">
           {/* Success banner */}
           <div className="bg-[#1a3a2a] rounded-xl p-6 border border-[#4ade80]/30 text-center">
-            <p className="text-2xl mb-2">✅ Bracket Saved Successfully!</p>
+            <p className="text-2xl mb-2 flex items-center justify-center gap-2"><CheckCircle className="w-6 h-6" /> Bracket Saved Successfully!</p>
             <p className="text-gray-400">Your {tournament.shortName} picks are locked in.</p>
             {displayName && (
-              <p className="text-[#ffd700] mt-1 font-bold">— {displayName}'s bracket —</p>
+              <p className="text-[#ffd700] mt-1 font-bold">- {displayName}'s bracket -</p>
             )}
           </div>
 
           {/* Auto-joined group notification */}
           {joinedGroup && (
             <div className="bg-[#1a2a44] rounded-xl p-4 border border-[#4ade80]/30">
-              <p className="text-[#4ade80] font-bold">✅ You've joined “{joinedGroup.name}”!</p>
+              <p className="text-[#4ade80] font-bold flex items-center gap-1"><CheckCircle className="w-4 h-4" /> You've joined "{joinedGroup.name}"!</p>
               <p className="text-gray-400 text-sm mt-1">Your bracket has been added to this group.</p>
+              <a href={`/group?id=${joinedGroup.id}`} className="text-[#ffd700] hover:underline text-sm mt-2 inline-block">View Leaderboard →</a>
             </div>
           )}
 
-          {/* Share image section */}
+          {/* ── Share Link (only after saving) ── */}
           <div className="bg-[#1a2a44] rounded-xl p-5 border border-[#2a3a54]">
-            <h3 className="font-bold text-lg mb-3">📱 Save & Share Your Bracket</h3>
+            <h3 className="font-bold text-lg mb-3">🔗 Share Your Bracket Link</h3>
             <div className="flex gap-3 flex-wrap">
-              <button
-                onClick={handleDownloadImage}
-                disabled={imageDownloading}
-                className="bg-[#ffd700] hover:bg-[#ffcc00] disabled:bg-gray-600 text-black font-bold py-3 px-5 rounded-xl transition-all flex items-center gap-2"
-              >
-                {imageDownloading ? '⏳ Generating...' : '📥 Save to Photos'}
-              </button>
-              <button
-                onClick={handleCopyImage}
-                className="bg-[#1a2a44] hover:bg-[#2a3a54] text-white font-bold py-3 px-5 rounded-xl border border-[#2a3a54] transition-all flex items-center gap-2"
-              >
-                {copied ? '✅ Copied!' : '📋 Copy Image'}
-              </button>
               {shareUrl && (
                 <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(shareUrl);
-                    setCopied(true);
-                    setTimeout(() => setCopied(false), 2000);
+                  onClick={async () => {
+                    const ok = await copyToClipboard(shareUrl);
+                    if (ok) { setLinkCopied(true); setTimeout(() => setLinkCopied(false), 2000); }
                   }}
-                  className="bg-[#1a2a44] hover:bg-[#2a3a54] text-white font-bold py-3 px-5 rounded-xl border border-[#2a3a54] transition-all flex items-center gap-2"
+                  className="bg-[#ffd700] hover:bg-[#ffcc00] text-black font-bold py-3 px-5 rounded-xl transition-all flex items-center gap-2"
                 >
-                  🔗 Copy Link
+                  <Link className="w-4 h-4" /> {linkCopied ? 'Copied!' : 'Copy Link'}
                 </button>
               )}
             </div>
-            <p className="text-xs text-gray-500 mt-2">💡 Save to Photos: Open in a new browser tab, long-press the image, then save.</p>
+            {shareUrl && (
+              <div className="mt-3 bg-[#0a1628] rounded-lg p-2">
+                <code className="text-sm text-[#ffd700] break-all">{shareUrl}</code>
+              </div>
+            )}
 
-            {/* Social share buttons */}
+            {/* Post on X — needs share link */}
             {shareUrl && (
               <div className="mt-4 pt-4 border-t border-[#2a3a54]">
-                <p className="text-sm text-gray-400 mb-3">Share your bracket on social</p>
                 <div className="flex gap-3 flex-wrap">
                   <a
-                    href={`https://x.com/intent/tweet?text=${encodeURIComponent(`Check out my LA 2028 Olympic Lacrosse bracket predictions! 🥍🥇 ${shareUrl}`)}`}
+                    href={`https://x.com/intent/tweet?text=${encodeURIComponent(`Check out my ${tournament.shortName} bracket predictions! ${shareUrl} ${tournament.id === 'olympic-sixes-2028' ? '#Lacrosse #OlympicSixes #Sixes #BracketPredictor' : tournament.id === 'wll-2026' ? '#Lacrosse #WLL #BracketPredictor' : '#Lacrosse #PLL #BracketPredictor'}`)}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="bg-black hover:bg-gray-800 text-white font-bold py-2.5 px-5 rounded-xl transition-all flex items-center gap-2 border border-gray-700"
@@ -974,28 +1181,16 @@ function ReviewSave({
                     <svg viewBox="0 0 24 24" className="w-4 h-4 fill-white"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
                     Post on X
                   </a>
-                  <a
-                    href="https://www.instagram.com/"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="bg-gradient-to-br from-purple-600 via-pink-500 to-orange-400 hover:from-purple-700 hover:via-pink-600 hover:to-orange-500 text-white font-bold py-2.5 px-5 rounded-xl transition-all flex items-center gap-2"
-                  >
-                    <svg viewBox="0 0 24 24" className="w-4 h-4 fill-white"><rect x="2" y="2" width="20" height="20" rx="5" ry="5" fill="none" stroke="white" strokeWidth="2"/><circle cx="12" cy="12" r="5" fill="none" stroke="white" strokeWidth="2"/><circle cx="17.5" cy="6.5" r="1.5" fill="white"/></svg>
-                    Instagram Story
-                  </a>
-                  <a
-                    href="https://www.tiktok.com/"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="bg-[#010101] hover:bg-gray-800 text-white font-bold py-2.5 px-5 rounded-xl transition-all flex items-center gap-2 border border-gray-700"
-                  >
-                    <svg viewBox="0 0 24 24" className="w-4 h-4 fill-white"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1v-3.5a6.37 6.37 0 00-.79-.05A6.34 6.34 0 003.15 15.2a6.34 6.34 0 0010.86 4.46V13a8.28 8.28 0 005.58 2.17V11.7a4.83 4.83 0 01-3.77-1.64z"/></svg>
-                    TikTok
-                  </a>
                 </div>
-                <p className="text-xs text-gray-500 mt-2">💡 Tip: Save your bracket image first, then share it on Instagram or TikTok!</p>
               </div>
             )}
+          </div>
+
+          {/* ── Groups Section ── */}
+          <div className="flex items-center gap-2 my-2">
+            <div className="h-px flex-1 bg-[#2a3a54]" />
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Groups</span>
+            <div className="h-px flex-1 bg-[#2a3a54]" />
           </div>
 
           {/* Group section */}
@@ -1004,10 +1199,10 @@ function ReviewSave({
               onClick={() => setShowGroupSection(!showGroupSection)}
               className="w-full text-left flex items-center justify-between"
             >
-              <h3 className="font-bold text-lg">👥 Create or Join a Group</h3>
+              <h3 className="font-bold text-lg flex items-center gap-2"><Users className="w-5 h-5" /> Create or Join a Group</h3>
               <span className="text-gray-500">{showGroupSection ? '▲' : '▼'}</span>
             </button>
-            
+
             {showGroupSection && (
               <div className="mt-4 space-y-4">
                 {/* Join group */}
@@ -1061,8 +1256,9 @@ function ReviewSave({
                 {/* Created group success */}
                 {createdGroup && (
                   <div className="bg-[#1a3a2a] rounded-lg p-4 border border-[#4ade80]/30">
-                    <p className="text-[#4ade80] font-bold mb-2">✅ Group Created!</p>
+                    <p className="text-[#4ade80] font-bold mb-2 flex items-center gap-1"><CheckCircle className="w-4 h-4" /> Group Created!</p>
                     <p className="text-white font-bold">{createdGroup.name}</p>
+                    <a href={`/group?id=${createdGroup.id}`} className="text-[#ffd700] hover:underline text-sm mt-1 inline-block">View Leaderboard →</a>
                     <div className="mt-3 bg-[#0a1628] rounded-lg p-3">
                       <p className="text-xs text-gray-400 mb-1">Share this invite code with friends:</p>
                       <p className="text-[#ffd700] font-mono text-xl font-bold text-center">{createdGroup.inviteCode}</p>
@@ -1074,14 +1270,13 @@ function ReviewSave({
                           {shareUrl}?group={createdGroup.inviteCode}
                         </code>
                         <button
-                          onClick={() => {
-                            navigator.clipboard.writeText(`${shareUrl}?group=${createdGroup.inviteCode}`);
-                            setCopied(true);
-                            setTimeout(() => setCopied(false), 2000);
+                          onClick={async () => {
+                            const ok = await copyToClipboard(`${shareUrl}?group=${createdGroup.inviteCode}`);
+                            if (ok) { setGroupCopied(true); setTimeout(() => setGroupCopied(false), 2000); }
                           }}
                           className="bg-[#1a2a44] hover:bg-[#2a3a54] text-white px-3 rounded-lg border border-[#2a3a54]"
                         >
-                          📋
+                          <ClipboardCopy className="w-4 h-4" />
                         </button>
                       </div>
                     </div>
@@ -1091,12 +1286,39 @@ function ReviewSave({
                 {/* Joined group success */}
                 {joinedGroup && !createdGroup && (
                   <div className="bg-[#1a3a2a] rounded-lg p-4 border border-[#4ade80]/30">
-                    <p className="text-[#4ade80] font-bold mb-1">You've joined “{joinedGroup.name}”!</p>
+                    <p className="text-[#4ade80] font-bold mb-1">You've joined "{joinedGroup.name}"!</p>
                     <p className="text-gray-400 text-sm">Your bracket has been added to this group.</p>
                   </div>
                 )}
               </div>
             )}
+
+            {/* Copy group invite link — always show at bottom if there's a group */}
+            {(createdGroup || joinedGroup || groupInvite) && (
+              <div className="mt-3 pt-3 border-t border-[#2a3a54]">
+                <button
+                  onClick={async () => {
+                    const inviteCode = createdGroup?.inviteCode || joinedGroup?.inviteCode || groupInvite?.inviteCode;
+                    if (inviteCode) {
+                      const ok = await copyToClipboard(`${window.location.origin}/?group=${inviteCode}`);
+                      if (ok) { setGroupCopied(true); setTimeout(() => setGroupCopied(false), 2000); }
+                    }
+                  }}
+                  className="w-full bg-[#1a2a44] hover:bg-[#2a3a54] text-white font-bold py-3 px-5 rounded-xl border border-[#2a3a54] transition-all flex items-center justify-center gap-2"
+                >
+                  <Users className="w-4 h-4" /> {groupCopied ? 'Copied!' : 'Copy Group Invite Link'}
+                </button>
+                <p className="text-xs text-gray-500 mt-1.5 text-center">Share this link so friends can join your group</p>
+                <a href="/my-groups" className="text-[#ffd700] hover:underline text-sm mt-2 inline-block text-center w-full">View All My Groups →</a>
+              </div>
+            )}
+          </div>
+
+          {/* ── Community Section ── */}
+          <div className="flex items-center gap-2 my-2">
+            <div className="h-px flex-1 bg-[#2a3a54]" />
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Community</span>
+            <div className="h-px flex-1 bg-[#2a3a54]" />
           </div>
 
           {/* Community stats */}
@@ -1108,7 +1330,7 @@ function ReviewSave({
               <span className="text-2xl">☕</span>
               <div>
                 <p className="text-sm text-gray-300">Love the bracket predictor?</p>
-                <p className="text-xs text-gray-500">Support coming soon — stay tuned!</p>
+                <p className="text-xs text-gray-500">Support coming soon - stay tuned!</p>
               </div>
             </div>
           </div>
@@ -1128,12 +1350,25 @@ function ReviewSave({
                 rel="noopener noreferrer"
                 className="flex-1 bg-[#1a2a44] hover:bg-[#2a3a54] text-white font-bold py-3 px-6 rounded-xl border border-[#2a3a54] text-center transition-all"
               >
-                📋 View Full Results
+                <ClipboardList className="w-4 h-4" /> View Full Results
               </a>
             )}
           </div>
         </div>
       )}
+
+      {/* Footer */}
+      <div className="mt-12 text-center border-t border-[#2a3a54] pt-6">
+        <p className="text-xs text-gray-500 leading-relaxed max-w-md mx-auto">
+          This is an unofficial passion project for the lacrosse community. Not affiliated with or endorsed by PLL, WLL, or World Lacrosse.
+        </p>
+        <p className="mt-2 text-xs text-gray-500">
+          Free for non-commercial use, no modifications ·{' '}
+          <a href="https://creativecommons.org/licenses/by-nc-nd/4.0/" target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-gray-300 underline">
+            CC BY-NC-ND 4.0
+          </a>
+        </p>
+      </div>
     </div>
   );
 }

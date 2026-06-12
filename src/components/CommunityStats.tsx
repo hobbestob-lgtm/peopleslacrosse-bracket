@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { TournamentConfig, Team } from '@/types/bracket';
 import { WeeklySchedule, ConfidencePick } from '@/types/confidence-pool';
+import TeamIcon from '@/components/TeamIcon';
 
 interface CommunityStatsProps {
   tournament: TournamentConfig;
@@ -92,22 +93,19 @@ export default function CommunityStats({ tournament, weekSchedule, mode }: Commu
 
             return (
               <div key={matchupId} className="mb-4 last:mb-0">
-                <p className="text-xs text-gray-500 mb-2">
-                  {getTeam(matchup.homeTeam)?.flag} {getTeam(matchup.homeTeam)?.shortName} vs {getTeam(matchup.awayTeam)?.flag} {getTeam(matchup.awayTeam)?.shortName}
-                </p>
                 {teams.map(([teamId, teamStats]) => {
                   const team = getTeam(teamId);
                   const pct = totalPicksForMatchup > 0 ? Math.round((teamStats.pickCount / totalPicksForMatchup) * 100) : 0;
                   return (
                     <div key={teamId} className="flex items-center gap-2 mb-1.5">
-                      <span className="text-lg w-7">{team?.flag}</span>
+                      <TeamIcon team={team!} size={20} className="mr-1" />
                       <span className="text-sm font-medium text-white w-24 truncate">{team?.shortName}</span>
                       <div className="flex-1 bg-[#0a1628] rounded-full h-5 relative overflow-hidden">
                         <div
                           className="bg-gradient-to-r from-[#ffd700] to-[#ff8c00] h-full rounded-full transition-all"
                           style={{ width: `${pct}%` }}
                         />
-                        <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-black">
+                        <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
                           {pct}%
                         </span>
                       </div>
@@ -152,14 +150,14 @@ export default function CommunityStats({ tournament, weekSchedule, mode }: Commu
                 const pct = Math.round((count / total) * 100);
                 return (
                   <div key={teamId} className="flex items-center gap-2 mb-2">
-                    <span className="text-lg w-7">{team?.flag}</span>
+                    <TeamIcon team={team!} size={20} className="mr-1" />
                     <span className="text-sm font-medium text-white w-28 truncate">{team?.name}</span>
                     <div className="flex-1 bg-[#0a1628] rounded-full h-5 relative overflow-hidden">
                       <div
                         className="bg-gradient-to-r from-[#ffd700] to-[#ff8c00] h-full rounded-full transition-all"
                         style={{ width: `${pct}%` }}
                       />
-                      <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-black">
+                      <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
                         {pct}%
                       </span>
                     </div>
@@ -187,14 +185,14 @@ export default function CommunityStats({ tournament, weekSchedule, mode }: Commu
                 const posLabel = posNum === 1 ? '1st' : posNum === 2 ? '2nd' : posNum === 3 ? '3rd' : `${posNum}th`;
                 return (
                   <div key={team.id} className="flex items-center gap-2 mb-1.5">
-                    <span className="text-lg w-7">{team.flag}</span>
+                    <TeamIcon team={team} size={20} className="mr-1" />
                     <span className="text-sm font-medium text-white w-24 truncate">{team.shortName}</span>
                     <div className="flex-1 bg-[#0a1628] rounded-full h-4 relative overflow-hidden">
                       <div
                         className="bg-gradient-to-r from-[#4ade80] to-[#22c55e] h-full rounded-full transition-all"
                         style={{ width: `${Math.max(pct, 3)}%` }}
                       />
-                      <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-white">
+                      <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
                         {pct}% {posLabel}
                       </span>
                     </div>

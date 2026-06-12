@@ -2,6 +2,7 @@
 
 import { TournamentConfig, Team } from '@/types/bracket';
 import { WeeklySchedule, ConfidencePick } from '@/types/confidence-pool';
+import { drawTeamIconAsync, drawTeamLabelAsync, getTeamCanvasLabel, getTeamLabelWidth, preloadTeamIcons } from '@/lib/canvas-team';
 
 interface ConfidenceShareImageOptions {
   tournament: TournamentConfig;
@@ -46,31 +47,53 @@ function formatShortDate(dateStr: string): string {
   return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error(`Failed to load image: ${src}`));
+    img.src = src;
+  });
+}
+
 // Decorative accent: subtle grid lines in background
 function drawBackgroundGrid(ctx: CanvasRenderingContext2D, w: number, h: number) {
-  ctx.strokeStyle = 'rgba(42, 58, 84, 0.3)';
+  ctx.strokeStyle = 'rgba(42, 58, 84, 0.15)';
   ctx.lineWidth = 0.5;
   for (let y = 0; y < h; y += 60) {
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(w, y);
-    ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
   }
   for (let x = 0; x < w; x += 60) {
-    ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, h);
-    ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+  }
+}
+
+// Draw a subtle horizontal section divider with label
+function drawSectionDivider(ctx: CanvasRenderingContext2D, x1: number, x2: number, y: number, label?: string) {
+  if (label) {
+    ctx.font = 'bold 13px system-ui, sans-serif';
+    const labelW = ctx.measureText(label).width + 24;
+    const midX = (x1 + x2) / 2;
+    ctx.strokeStyle = '#2a3a54';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x1, y); ctx.lineTo(midX - labelW / 2, y); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(midX + labelW / 2, y); ctx.lineTo(x2, y); ctx.stroke();
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#6b7b8b';
+    ctx.fillText(label, midX, y - 6);
+  } else {
+    ctx.strokeStyle = '#2a3a54';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x1, y); ctx.lineTo(x2, y); ctx.stroke();
   }
 }
 
 // Draw a mini bar for community pick percentages
 function drawPickBar(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, pct: number, color: string) {
-  // Background
   ctx.fillStyle = 'rgba(10, 22, 40, 0.6)';
   roundRect(ctx, x, y, w, 14, 4);
   ctx.fill();
-  // Fill
   const fillW = Math.max(w * (pct / 100), 6);
   const grad = ctx.createLinearGradient(x, y, x + fillW, y);
   grad.addColorStop(0, color);
@@ -78,7 +101,6 @@ function drawPickBar(ctx: CanvasRenderingContext2D, x: number, y: number, w: num
   ctx.fillStyle = grad;
   roundRect(ctx, x, y, fillW, 14, 4);
   ctx.fill();
-  // Percentage text
   ctx.fillStyle = '#ffffff';
   ctx.font = 'bold 10px system-ui, sans-serif';
   ctx.textAlign = 'left';
@@ -86,17 +108,26 @@ function drawPickBar(ctx: CanvasRenderingContext2D, x: number, y: number, w: num
 }
 
 /**
- * Generate a shareable confidence pool picks image — 1080x1350 (4:5 IG feed).
+ * Generate a shareable confidence pool picks image — 1080x1920 (9:16 IG story).
+ * Generous spacing between cards, clear section breaks.
  */
-export function generateConfidenceShareImage(options: ConfidenceShareImageOptions): Promise<Blob> {
+export async function generateConfidenceShareImage(options: ConfidenceShareImageOptions): Promise<Blob> {
   const { tournament, weekSchedule, picks, displayName, maxPoints, communityStats } = options;
 
+  await preloadTeamIcons(tournament.groups.flatMap(g => g.teams));
+
+  let logoImg: HTMLImageElement | null = null;
+  try { logoImg = await loadImage('/pl-logo-gold-sm.png'); } catch {}
+
   const WIDTH = 1080;
-  const HEIGHT = 1350;
+  const HEIGHT = 1920;
   const canvas = document.createElement('canvas');
   canvas.width = WIDTH;
   canvas.height = HEIGHT;
   const ctx = canvas.getContext('2d')!;
+
+  const MX = 50;
+  const CW = WIDTH - MX * 2;
 
   // Background
   const bg = ctx.createLinearGradient(0, 0, 0, HEIGHT);
@@ -114,39 +145,38 @@ export function generateConfidenceShareImage(options: ConfidenceShareImageOption
   ctx.fillStyle = headerGrad;
   ctx.fillRect(0, 0, WIDTH, 6);
 
-  // ── HEADER ──
+  // ── HEADER with logo ──
   ctx.textAlign = 'center';
-  ctx.fillStyle = '#ffd700';
-  ctx.font = 'bold 42px system-ui, -apple-system, sans-serif';
-  ctx.fillText(`🥍 ${tournament.shortName}`, WIDTH / 2, 62);
-
-  ctx.fillStyle = '#8899aa';
-  ctx.font = 'bold 22px system-ui, sans-serif';
-  ctx.fillText(`Week ${weekSchedule.weekNumber} Confidence Picks`, WIDTH / 2, 92);
+  if (logoImg) {
+    const logoH = 140;
+    const logoW = Math.round(logoImg.naturalWidth / logoImg.naturalHeight * logoH);
+    ctx.drawImage(logoImg, (WIDTH - logoW) / 2, 24, logoW, logoH);
+    ctx.fillStyle = '#8899aa';
+    ctx.font = 'bold 38px system-ui, sans-serif';
+    ctx.fillText(`Week ${weekSchedule.weekNumber} Confidence Picks`, WIDTH / 2, 190);
+  } else {
+    ctx.fillStyle = '#ffd700';
+    ctx.font = 'bold 48px system-ui, -apple-system, sans-serif';
+    ctx.fillText(`🥍 ${tournament.shortName}`, WIDTH / 2, 62);
+    ctx.fillStyle = '#8899aa';
+    ctx.font = 'bold 42px system-ui, sans-serif';
+    ctx.fillText(`Week ${weekSchedule.weekNumber} Confidence Picks`, WIDTH / 2, 92);
+  }
 
   ctx.fillStyle = '#6b7b8b';
   ctx.font = '16px system-ui, sans-serif';
-  ctx.fillText(`${weekSchedule.venue} · ${formatDate(weekSchedule.startDate)}${weekSchedule.startDate !== weekSchedule.endDate ? ` – ${formatDate(weekSchedule.endDate)}` : ''}`, WIDTH / 2, 114);
-
-  // Separator
-  ctx.strokeStyle = '#2a3a54';
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(50, 132);
-  ctx.lineTo(WIDTH - 50, 132);
-  ctx.stroke();
+  ctx.fillText(`${weekSchedule.venue} · ${formatDate(weekSchedule.startDate)}${weekSchedule.startDate !== weekSchedule.endDate ? ` – ${formatDate(weekSchedule.endDate)}` : ''}`, WIDTH / 2, 214);
 
   // ── MY PICKS SECTION ──
-  ctx.textAlign = 'left';
-  ctx.fillStyle = '#ffd700';
-  ctx.font = 'bold 18px system-ui, sans-serif';
-  ctx.fillText('MY PICKS', 50, 158);
+  let y = 246;
+  drawSectionDivider(ctx, MX, WIDTH - MX, y, 'MY PICKS');
+  y += 18;
 
-  // Picks sorted by confidence (highest first)
   const sortedPicks = [...picks].sort((a, b) => b.confidence - a.confidence);
-  const cardHeight = 72;
-  const cardGap = 10;
-  let y = 172;
+  const cardHeight = 84;    // Increased from 72 for logo breathing room
+  const cardGap = 12;       // Increased from 10
+  const innerPad = 16;      // Card inner padding
+  const badgeR = 20;
 
   for (let i = 0; i < sortedPicks.length; i++) {
     const pick = sortedPicks[i];
@@ -159,85 +189,74 @@ export function generateConfidenceShareImage(options: ConfidenceShareImageOption
 
     // Card background
     ctx.fillStyle = isTop ? 'rgba(255, 215, 0, 0.06)' : 'rgba(26, 42, 68, 0.5)';
-    roundRect(ctx, 50, y, WIDTH - 100, cardHeight, 10);
+    roundRect(ctx, MX, y, CW, cardHeight, 10);
     ctx.fill();
     ctx.strokeStyle = isTop ? '#ffd700' : '#2a3a54';
     ctx.lineWidth = isTop ? 2 : 1;
-    roundRect(ctx, 50, y, WIDTH - 100, cardHeight, 10);
+    roundRect(ctx, MX, y, CW, cardHeight, 10);
     ctx.stroke();
 
     // Confidence badge (circle)
-    const badgeX = 50 + 36;
+    const badgeX = MX + 36;
     const badgeY = y + cardHeight / 2;
     ctx.beginPath();
-    ctx.arc(badgeX, badgeY, 18, 0, Math.PI * 2);
+    ctx.arc(badgeX, badgeY, badgeR, 0, Math.PI * 2);
     ctx.fillStyle = isTop ? '#ffd700' : '#4ade80';
     ctx.fill();
     ctx.textAlign = 'center';
-    ctx.fillStyle = isTop ? '#000' : '#000';
+    ctx.fillStyle = '#000';
     ctx.font = 'bold 18px system-ui, sans-serif';
     ctx.fillText(`${pick.confidence}`, badgeX, badgeY + 6);
 
-    // Winner name + record
+    // Winner name + record (with team logo)
     ctx.textAlign = 'left';
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 22px system-ui, sans-serif';
-    ctx.fillText(`${winner.flag} ${winner.shortName}`, 98, y + 28);
-    // Record
-    if (winner.record) {
-      ctx.fillStyle = winner.record.split('-')[0] > winner.record.split('-')[1] ? '#4ade80' : '#ef4444';
-      ctx.font = '14px system-ui, sans-serif';
-      ctx.fillText(`(${winner.record})`, 98 + ctx.measureText(`${winner.flag} ${winner.shortName}`).width + 8, y + 28);
-    }
+    const nameY = y + innerPad + 14;
+    await drawTeamLabelAsync(ctx, winner, MX + 70, nameY, { fontSize: 20, bold: true, color: '#ffffff', showRecord: true });
 
     // vs opponent + date
+    const vsY = y + innerPad + 40;
     ctx.fillStyle = '#6b7b8b';
     ctx.font = '14px system-ui, sans-serif';
-    ctx.fillText(`vs ${opponent?.flag || ''} ${opponent?.shortName || 'TBD'}${opponent?.record ? ` (${opponent.record})` : ''}`, 98, y + 50);
+    const vsLabel = opponent ? `vs ${getTeamCanvasLabel(opponent)}` : 'vs TBD';
+    ctx.fillText(vsLabel, MX + 70, vsY);
+    if (opponent?.record) {
+      ctx.fillStyle = opponent.record.split('-')[0] > opponent.record.split('-')[1] ? '#4ade80' : '#ef4444';
+      ctx.font = '12px system-ui, sans-serif';
+      ctx.fillText(`(${opponent.record})`, MX + 70 + ctx.measureText(vsLabel).width + 4, vsY);
+    }
 
     // PTS label
     ctx.textAlign = 'right';
     ctx.fillStyle = isTop ? '#ffd700' : '#4ade80';
     ctx.font = 'bold 14px system-ui, sans-serif';
-    ctx.fillText(`${pick.confidence} PTS`, WIDTH - 66, y + 30);
+    ctx.fillText(`${pick.confidence} PTS`, WIDTH - MX - innerPad, nameY);
 
     // Date
     ctx.fillStyle = '#4a5a6a';
     ctx.font = '12px system-ui, sans-serif';
-    ctx.fillText(formatShortDate(matchup.date), WIDTH - 66, y + 50);
+    ctx.fillText(formatShortDate(matchup.date), WIDTH - MX - innerPad, vsY);
 
     y += cardHeight + cardGap;
   }
 
   // ── COMMUNITY PICKS SECTION ──
-  y += 16;
-  ctx.strokeStyle = '#2a3a54';
-  ctx.beginPath();
-  ctx.moveTo(50, y);
-  ctx.lineTo(WIDTH - 50, y);
-  ctx.stroke();
-  y += 18;
-
-  ctx.textAlign = 'left';
-  ctx.fillStyle = '#ffd700';
-  ctx.font = 'bold 18px system-ui, sans-serif';
-  ctx.fillText('📊 COMMUNITY PICKS', 50, y);
+  y += 14;
+  drawSectionDivider(ctx, MX, WIDTH - MX, y, 'COMMUNITY PICKS');
+  y += 20;
 
   if (communityStats && communityStats.totalEntries > 0) {
-    ctx.textAlign = 'right';
+    ctx.textAlign = 'left';
     ctx.fillStyle = '#6b7b8b';
     ctx.font = '14px system-ui, sans-serif';
-    ctx.fillText(`${communityStats.totalEntries} pick${communityStats.totalEntries !== 1 ? 's' : ''}`, WIDTH - 50, y);
-    y += 20;
+    ctx.fillText(`${communityStats.totalEntries} pick${communityStats.totalEntries !== 1 ? 's' : ''}`, MX, y);
+    y += 24;
 
-    // Show community percentages for each matchup
     const sortedMatchupIds = Object.entries(communityStats.matchupStats)
       .sort(([, a], [, b]) => b.totalPicks - a.totalPicks);
 
     for (const [matchupId, stats] of sortedMatchupIds.slice(0, 4)) {
       const matchup = weekSchedule.matchups.find(m => m.id === matchupId);
       if (!matchup) continue;
-
       const homeTeam = getTeam(tournament, matchup.homeTeam);
       const awayTeam = getTeam(tournament, matchup.awayTeam);
       if (!homeTeam || !awayTeam) continue;
@@ -245,14 +264,20 @@ export function generateConfidenceShareImage(options: ConfidenceShareImageOption
       const teams = Object.entries(stats.teams).sort(([, a], [, b]) => b.pickCount - a.pickCount);
       const total = stats.totalPicks || 1;
 
+      // Matchup card background
+      const matchupH = 60;
+      ctx.fillStyle = 'rgba(26, 42, 68, 0.35)';
+      roundRect(ctx, MX, y, CW, matchupH, 8);
+      ctx.fill();
+
       // Matchup label
       ctx.textAlign = 'left';
       ctx.fillStyle = '#8899aa';
       ctx.font = '12px system-ui, sans-serif';
-      ctx.fillText(`${homeTeam.flag} ${homeTeam.shortName} vs ${awayTeam.flag} ${awayTeam.shortName}`, 50, y + 12);
+      ctx.fillText(`${getTeamCanvasLabel(homeTeam)} vs ${getTeamCanvasLabel(awayTeam)}`, MX + 12, y + 16);
 
       // Pick bars
-      let barY = y + 18;
+      let barY = y + 22;
       for (const [teamId, teamStats] of teams) {
         const team = getTeam(tournament, teamId);
         if (!team) continue;
@@ -261,50 +286,67 @@ export function generateConfidenceShareImage(options: ConfidenceShareImageOption
         ctx.textAlign = 'left';
         ctx.fillStyle = '#ffffff';
         ctx.font = 'bold 12px system-ui, sans-serif';
-        ctx.fillText(`${team.flag} ${team.shortName}`, 50, barY + 12);
-        drawPickBar(ctx, 180, barY, WIDTH - 290, pct, teamId === picks.find(p => p.matchupId === matchupId)?.winnerId ? '#ffd700' : '#4a8a6a');
+        await drawTeamLabelAsync(ctx, team, MX + 12, barY + 12, { fontSize: 12, bold: true, color: '#ffffff' });
+        drawPickBar(ctx, MX + 160, barY, CW - 200, pct, teamId === picks.find(p => p.matchupId === matchupId)?.winnerId ? '#ffd700' : '#4a8a6a');
         barY += 20;
       }
-      y = barY + 6;
+      y += matchupH + 10;
     }
   } else {
     ctx.textAlign = 'left';
     ctx.fillStyle = '#4a5a6a';
     ctx.font = '14px system-ui, sans-serif';
-    ctx.fillText('Be the first to make picks!', 50, y + 16);
+    ctx.fillText('Be the first to make picks!', MX, y + 16);
     y += 30;
   }
 
-  // ── CTA SECTION ──
-  const ctaY = HEIGHT - 120;
-  ctx.fillStyle = 'rgba(255, 215, 0, 0.08)';
-  roundRect(ctx, 40, ctaY, WIDTH - 80, 70, 12);
-  ctx.fill();
-  ctx.strokeStyle = '#ffd700';
-  ctx.lineWidth = 1.5;
-  roundRect(ctx, 40, ctaY, WIDTH - 80, 70, 12);
-  ctx.stroke();
+  // ── FOOTER ──
+  const FOOTER_HEIGHT = 420;
+  const footerY = HEIGHT - FOOTER_HEIGHT;
 
+  ctx.fillStyle = 'rgba(8, 16, 30, 0.92)';
+  ctx.fillRect(0, footerY, WIDTH, FOOTER_HEIGHT);
+
+  const goldGrad = ctx.createLinearGradient(0, 0, WIDTH, 0);
+  goldGrad.addColorStop(0, 'rgba(255, 215, 0, 0)');
+  goldGrad.addColorStop(0.15, '#ffd700');
+  goldGrad.addColorStop(0.85, '#ffd700');
+  goldGrad.addColorStop(1, 'rgba(255, 215, 0, 0)');
+  ctx.strokeStyle = goldGrad;
+  ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(0, footerY); ctx.lineTo(WIDTH, footerY); ctx.stroke();
+
+  const footerLogoH = 180;
+  const footerLogoW = logoImg ? Math.round(logoImg.naturalWidth / logoImg.naturalHeight * footerLogoH) : 0;
+  const logoTopY = footerY + 30;
+  if (logoImg) {
+    ctx.drawImage(logoImg, (WIDTH - footerLogoW) / 2, logoTopY, footerLogoW, footerLogoH);
+  } else {
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#ffd700';
+    ctx.font = 'bold 42px system-ui, sans-serif';
+    ctx.fillText("PEOPLE'S LACROSSE", WIDTH / 2, logoTopY + 60);
+  }
+
+  const urlY = logoTopY + footerLogoH + 65;
   ctx.textAlign = 'center';
-  ctx.fillStyle = '#ffd700';
-  ctx.font = 'bold 20px system-ui, sans-serif';
-  ctx.fillText('🥍 Make Your Picks → bracket.peopleslacrosse.com', WIDTH / 2, ctaY + 28);
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 42px system-ui, sans-serif';
+  ctx.fillText('bracket.peopleslacrosse.com', WIDTH / 2, urlY);
 
+  const subtitleY = urlY + 45;
   ctx.fillStyle = '#8899aa';
-  ctx.font = '14px system-ui, sans-serif';
-  ctx.fillText('Compete with friends · Create a group · Track your scores', WIDTH / 2, ctaY + 52);
+  ctx.font = '27px system-ui, sans-serif';
+  ctx.fillText('🥍 Confidence Picks · Compete with Friends · Create a Group', WIDTH / 2, subtitleY);
 
-  // PL branding
-  ctx.fillStyle = '#ffd700';
-  ctx.font = 'bold 16px system-ui, sans-serif';
-  ctx.fillText("People's Lacrosse", WIDTH / 2, HEIGHT - 32);
-
-  // Display name
   if (displayName) {
     ctx.fillStyle = '#6b7b8b';
-    ctx.font = '13px system-ui, sans-serif';
-    ctx.fillText(`— ${displayName}'s picks —`, WIDTH / 2, HEIGHT - 52);
+    ctx.font = '23px system-ui, sans-serif';
+    ctx.fillText(`— ${displayName}'s picks —`, WIDTH / 2, subtitleY + 40);
   }
+
+  ctx.fillStyle = '#ffd700';
+  ctx.fillRect(0, HEIGHT - 5, WIDTH, 5);
 
   return new Promise((resolve, reject) => {
     canvas.toBlob(
@@ -317,8 +359,13 @@ export function generateConfidenceShareImage(options: ConfidenceShareImageOption
 /**
  * Generate an Instagram Story-sized image (1080x1920).
  */
-export function generateConfidenceStoryImage(options: ConfidenceShareImageOptions): Promise<Blob> {
+export async function generateConfidenceStoryImage(options: ConfidenceShareImageOptions): Promise<Blob> {
   const { tournament, weekSchedule, picks, displayName, maxPoints, communityStats } = options;
+
+  await preloadTeamIcons(tournament.groups.flatMap(g => g.teams));
+
+  let logoImg: HTMLImageElement | null = null;
+  try { logoImg = await loadImage('/pl-logo-gold-sm.png'); } catch {}
 
   const WIDTH = 1080;
   const HEIGHT = 1920;
@@ -326,6 +373,9 @@ export function generateConfidenceStoryImage(options: ConfidenceShareImageOption
   canvas.width = WIDTH;
   canvas.height = HEIGHT;
   const ctx = canvas.getContext('2d')!;
+
+  const MX = 50;
+  const CW = WIDTH - MX * 2;
 
   // Background
   const bg = ctx.createLinearGradient(0, 0, 0, HEIGHT);
@@ -343,37 +393,37 @@ export function generateConfidenceStoryImage(options: ConfidenceShareImageOption
   ctx.fillStyle = headerGrad;
   ctx.fillRect(0, 0, WIDTH, 8);
 
-  // ── HEADER ──
+  // ── HEADER with logo ──
   ctx.textAlign = 'center';
-  ctx.fillStyle = '#ffd700';
-  ctx.font = 'bold 52px system-ui, -apple-system, sans-serif';
-  ctx.fillText(`🥍 ${tournament.shortName}`, WIDTH / 2, 90);
-
-  ctx.fillStyle = '#8899aa';
-  ctx.font = 'bold 26px system-ui, sans-serif';
-  ctx.fillText(`Week ${weekSchedule.weekNumber} Picks`, WIDTH / 2, 128);
+  if (logoImg) {
+    const logoH = 140;
+    const logoW = Math.round(logoImg.naturalWidth / logoImg.naturalHeight * logoH);
+    ctx.drawImage(logoImg, (WIDTH - logoW) / 2, 24, logoW, logoH);
+    ctx.fillStyle = '#8899aa';
+    ctx.font = 'bold 44px system-ui, sans-serif';
+    ctx.fillText(`Week ${weekSchedule.weekNumber} Confidence Picks`, WIDTH / 2, 190);
+  } else {
+    ctx.fillStyle = '#ffd700';
+    ctx.font = 'bold 52px system-ui, -apple-system, sans-serif';
+    ctx.fillText(`🥍 ${tournament.shortName}`, WIDTH / 2, 90);
+    ctx.fillStyle = '#8899aa';
+    ctx.font = 'bold 48px system-ui, sans-serif';
+    ctx.fillText(`Week ${weekSchedule.weekNumber} Confidence Picks`, WIDTH / 2, 128);
+  }
 
   ctx.fillStyle = '#6b7b8b';
   ctx.font = '20px system-ui, sans-serif';
-  ctx.fillText(`${weekSchedule.venue}`, WIDTH / 2, 156);
-
-  ctx.strokeStyle = '#2a3a54';
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(60, 180);
-  ctx.lineTo(WIDTH - 60, 180);
-  ctx.stroke();
+  ctx.fillText(`${weekSchedule.venue}`, WIDTH / 2, 216);
 
   // ── MY PICKS ──
-  ctx.textAlign = 'left';
-  ctx.fillStyle = '#ffd700';
-  ctx.font = 'bold 20px system-ui, sans-serif';
-  ctx.fillText('MY PICKS', 60, 210);
+  let y = 246;
+  drawSectionDivider(ctx, MX, WIDTH - MX, y, 'MY PICKS');
+  y += 18;
 
   const sortedPicks = [...picks].sort((a, b) => b.confidence - a.confidence);
-  let y = 230;
-  const cardH = 110;
+  const cardH = 100;   // Increased from 110 — but with better internal spacing
   const cardGap = 14;
+  const innerPad = 18;
 
   for (let i = 0; i < sortedPicks.length; i++) {
     const pick = sortedPicks[i];
@@ -384,77 +434,69 @@ export function generateConfidenceStoryImage(options: ConfidenceShareImageOption
 
     const isTop = pick.confidence === Math.max(...picks.map(p => p.confidence));
 
+    // Card
     ctx.fillStyle = isTop ? 'rgba(255, 215, 0, 0.06)' : 'rgba(26, 42, 68, 0.5)';
-    roundRect(ctx, 50, y, WIDTH - 100, cardH, 14);
+    roundRect(ctx, MX, y, CW, cardH, 14);
     ctx.fill();
     ctx.strokeStyle = isTop ? '#ffd700' : '#2a3a54';
     ctx.lineWidth = isTop ? 2 : 1;
-    roundRect(ctx, 50, y, WIDTH - 100, cardH, 14);
+    roundRect(ctx, MX, y, CW, cardH, 14);
     ctx.stroke();
 
     // Confidence badge
+    const badgeX = MX + 40;
+    const badgeY = y + cardH / 2;
     ctx.beginPath();
-    ctx.arc(50 + 40, y + cardH / 2, 22, 0, Math.PI * 2);
+    ctx.arc(badgeX, badgeY, 24, 0, Math.PI * 2);
     ctx.fillStyle = isTop ? '#ffd700' : '#4ade80';
     ctx.fill();
     ctx.textAlign = 'center';
     ctx.fillStyle = '#000';
     ctx.font = 'bold 22px system-ui, sans-serif';
-    ctx.fillText(`${pick.confidence}`, 50 + 40, y + cardH / 2 + 7);
+    ctx.fillText(`${pick.confidence}`, badgeX, badgeY + 7);
 
-    // Winner
+    // Winner (with logo)
     ctx.textAlign = 'left';
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 28px system-ui, sans-serif';
-    ctx.fillText(`${winner.flag} ${winner.shortName}`, 105, y + 40);
+    const nameY = y + innerPad + 14;
+    await drawTeamLabelAsync(ctx, winner, MX + 80, nameY, { fontSize: 24, bold: true, color: '#ffffff', showRecord: true });
 
-    // Record
-    if (winner.record) {
-      const nameWidth = ctx.measureText(`${winner.flag} ${winner.shortName}`).width;
-      ctx.fillStyle = winner.record.split('-')[0] > winner.record.split('-')[1] ? '#4ade80' : '#ef4444';
-      ctx.font = '16px system-ui, sans-serif';
-      ctx.fillText(`(${winner.record})`, 105 + nameWidth + 8, y + 40);
-    }
-
-    // Opponent + record
+    // vs opponent
+    const vsY = y + innerPad + 44;
     ctx.fillStyle = '#6b7b8b';
-    ctx.font = '18px system-ui, sans-serif';
-    ctx.fillText(`vs ${opponent?.flag || ''} ${opponent?.shortName || 'TBD'}${opponent?.record ? ` (${opponent.record})` : ''}`, 105, y + 68);
+    ctx.font = '16px system-ui, sans-serif';
+    const vsLabel = opponent ? `vs ${getTeamCanvasLabel(opponent)}` : 'vs TBD';
+    ctx.fillText(vsLabel, MX + 80, vsY);
+    if (opponent?.record) {
+      ctx.fillStyle = opponent.record.split('-')[0] > opponent.record.split('-')[1] ? '#4ade80' : '#ef4444';
+      ctx.font = '14px system-ui, sans-serif';
+      ctx.fillText(`(${opponent.record})`, MX + 80 + ctx.measureText(vsLabel).width + 4, vsY);
+    }
 
     // PTS
     ctx.textAlign = 'right';
     ctx.fillStyle = isTop ? '#ffd700' : '#4ade80';
     ctx.font = 'bold 16px system-ui, sans-serif';
-    ctx.fillText(`${pick.confidence} PTS`, WIDTH - 66, y + 38);
+    ctx.fillText(`${pick.confidence} PTS`, WIDTH - MX - innerPad, nameY);
 
     // Date
     ctx.fillStyle = '#4a5a6a';
     ctx.font = '13px system-ui, sans-serif';
-    ctx.fillText(formatShortDate(matchup.date), WIDTH - 66, y + 60);
+    ctx.fillText(formatShortDate(matchup.date), WIDTH - MX - innerPad, vsY);
 
     y += cardH + cardGap;
   }
 
   // ── COMMUNITY PICKS ──
+  y += 16;
+  drawSectionDivider(ctx, MX, WIDTH - MX, y, 'COMMUNITY PICKS');
   y += 20;
-  ctx.strokeStyle = '#2a3a54';
-  ctx.beginPath();
-  ctx.moveTo(60, y);
-  ctx.lineTo(WIDTH - 60, y);
-  ctx.stroke();
-  y += 20;
-
-  ctx.textAlign = 'left';
-  ctx.fillStyle = '#ffd700';
-  ctx.font = 'bold 20px system-ui, sans-serif';
-  ctx.fillText('📊 COMMUNITY PICKS', 60, y);
 
   if (communityStats && communityStats.totalEntries > 0) {
-    ctx.textAlign = 'right';
+    ctx.textAlign = 'left';
     ctx.fillStyle = '#6b7b8b';
     ctx.font = '14px system-ui, sans-serif';
-    ctx.fillText(`${communityStats.totalEntries} pick${communityStats.totalEntries !== 1 ? 's' : ''}`, WIDTH - 60, y);
-    y += 22;
+    ctx.fillText(`${communityStats.totalEntries} pick${communityStats.totalEntries !== 1 ? 's' : ''}`, MX, y);
+    y += 24;
 
     const sortedMatchupIds = Object.entries(communityStats.matchupStats)
       .sort(([, a], [, b]) => b.totalPicks - a.totalPicks);
@@ -469,12 +511,17 @@ export function generateConfidenceStoryImage(options: ConfidenceShareImageOption
       const teams = Object.entries(stats.teams).sort(([, a], [, b]) => b.pickCount - a.pickCount);
       const total = stats.totalPicks || 1;
 
+      const matchupH = 65;
+      ctx.fillStyle = 'rgba(26, 42, 68, 0.35)';
+      roundRect(ctx, MX, y, CW, matchupH, 8);
+      ctx.fill();
+
       ctx.textAlign = 'left';
       ctx.fillStyle = '#8899aa';
       ctx.font = '13px system-ui, sans-serif';
-      ctx.fillText(`${homeTeam.flag} ${homeTeam.shortName} vs ${awayTeam.flag} ${awayTeam.shortName}`, 60, y + 14);
+      ctx.fillText(`${getTeamCanvasLabel(homeTeam)} vs ${getTeamCanvasLabel(awayTeam)}`, MX + 14, y + 18);
 
-      let barY = y + 20;
+      let barY = y + 24;
       for (const [teamId, teamStats] of teams) {
         const team = getTeam(tournament, teamId);
         if (!team) continue;
@@ -483,49 +530,67 @@ export function generateConfidenceStoryImage(options: ConfidenceShareImageOption
         ctx.textAlign = 'left';
         ctx.fillStyle = '#ffffff';
         ctx.font = 'bold 14px system-ui, sans-serif';
-        ctx.fillText(`${team.flag} ${team.shortName}`, 60, barY + 12);
-        drawPickBar(ctx, 200, barY, WIDTH - 320, pct, teamId === picks.find(p => p.matchupId === matchupId)?.winnerId ? '#ffd700' : '#4a8a6a');
+        await drawTeamLabelAsync(ctx, team, MX + 14, barY + 12, { fontSize: 14, bold: true, color: '#ffffff' });
+        drawPickBar(ctx, MX + 180, barY, CW - 220, pct, teamId === picks.find(p => p.matchupId === matchupId)?.winnerId ? '#ffd700' : '#4a8a6a');
         barY += 22;
       }
-      y = barY + 8;
+      y += matchupH + 12;
     }
   } else {
     ctx.textAlign = 'left';
     ctx.fillStyle = '#4a5a6a';
     ctx.font = '16px system-ui, sans-serif';
-    ctx.fillText('Be the first to make picks!', 60, y + 18);
+    ctx.fillText('Be the first to make picks!', MX, y + 18);
     y += 36;
   }
 
-  // ── CTA ──
-  const ctaY = HEIGHT - 140;
-  ctx.fillStyle = 'rgba(255, 215, 0, 0.08)';
-  roundRect(ctx, 40, ctaY, WIDTH - 80, 80, 14);
-  ctx.fill();
-  ctx.strokeStyle = '#ffd700';
-  ctx.lineWidth = 2;
-  roundRect(ctx, 40, ctaY, WIDTH - 80, 80, 14);
-  ctx.stroke();
+  // ── FOOTER ──
+  const FOOTER_HEIGHT = 500;
+  const footerY = HEIGHT - FOOTER_HEIGHT;
 
+  ctx.fillStyle = 'rgba(8, 16, 30, 0.92)';
+  ctx.fillRect(0, footerY, WIDTH, FOOTER_HEIGHT);
+
+  const goldGrad2 = ctx.createLinearGradient(0, 0, WIDTH, 0);
+  goldGrad2.addColorStop(0, 'rgba(255, 215, 0, 0)');
+  goldGrad2.addColorStop(0.15, '#ffd700');
+  goldGrad2.addColorStop(0.85, '#ffd700');
+  goldGrad2.addColorStop(1, 'rgba(255, 215, 0, 0)');
+  ctx.strokeStyle = goldGrad2;
+  ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(0, footerY); ctx.lineTo(WIDTH, footerY); ctx.stroke();
+
+  const footerLogoH = 180;
+  const footerLogoW = logoImg ? Math.round(logoImg.naturalWidth / logoImg.naturalHeight * footerLogoH) : 0;
+  const logoTopY = footerY + 35;
+  if (logoImg) {
+    ctx.drawImage(logoImg, (WIDTH - footerLogoW) / 2, logoTopY, footerLogoW, footerLogoH);
+  } else {
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#ffd700';
+    ctx.font = 'bold 48px system-ui, sans-serif';
+    ctx.fillText("PEOPLE'S LACROSSE", WIDTH / 2, logoTopY + 70);
+  }
+
+  const urlY = logoTopY + footerLogoH + 75;
   ctx.textAlign = 'center';
-  ctx.fillStyle = '#ffd700';
-  ctx.font = 'bold 22px system-ui, sans-serif';
-  ctx.fillText('🥍 Make Your Picks', WIDTH / 2, ctaY + 32);
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 48px system-ui, sans-serif';
+  ctx.fillText('bracket.peopleslacrosse.com', WIDTH / 2, urlY);
 
+  const subtitleY = urlY + 50;
   ctx.fillStyle = '#8899aa';
-  ctx.font = '16px system-ui, sans-serif';
-  ctx.fillText('bracket.peopleslacrosse.com · Compete with friends', WIDTH / 2, ctaY + 58);
-
-  // Branding
-  ctx.fillStyle = '#ffd700';
-  ctx.font = 'bold 18px system-ui, sans-serif';
-  ctx.fillText("People's Lacrosse", WIDTH / 2, HEIGHT - 36);
+  ctx.font = '30px system-ui, sans-serif';
+  ctx.fillText('🥍 Confidence Picks · Compete with Friends · Create a Group', WIDTH / 2, subtitleY);
 
   if (displayName) {
     ctx.fillStyle = '#6b7b8b';
-    ctx.font = '14px system-ui, sans-serif';
-    ctx.fillText(`— ${displayName}'s picks —`, WIDTH / 2, HEIGHT - 60);
+    ctx.font = '24px system-ui, sans-serif';
+    ctx.fillText(`— ${displayName}'s picks —`, WIDTH / 2, subtitleY + 45);
   }
+
+  ctx.fillStyle = '#ffd700';
+  ctx.fillRect(0, HEIGHT - 5, WIDTH, 5);
 
   return new Promise((resolve, reject) => {
     canvas.toBlob(
@@ -573,9 +638,4 @@ export async function copyConfidenceShareImageToClipboard(options: ConfidenceSha
   } catch {
     return false;
   }
-}
-
-// Re-export for backward compat
-function generateShareImage(options: ConfidenceShareImageOptions): Promise<Blob> {
-  return generateConfidenceShareImage(options);
 }

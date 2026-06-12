@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 120" fill="none">
+  <!-- Boston Cannons: Side-view cannon on wagon wheel -->
+  
+  <!-- Wagon wheel - behind the cannon -->
+  <!-- Outer rim -->
+  <circle cx="40" cy="88" r="24" stroke="#B71C1C" stroke-width="3" fill="#B71C1C" fill-opacity="0.04"/>
+  <!-- Inner hub ring -->
+  <circle cx="40" cy="88" r="5" stroke="#B71C1C" stroke-width="2" fill="#B71C1C" fill-opacity="0.12"/>
+  <!-- Hub center dot -->
+  <circle cx="40" cy="88" r="2" fill="#B71C1C" opacity="0.5"/>
+  
+  <!-- Spokes (8 spokes) -->
+  <line x1="40" y1="64" x2="40" y2="68" stroke="#B71C1C" stroke-width="1.5" opacity="0.4"/>
+  <line x1="40" y1="108" x2="40" y2="112" stroke="#B71C1C" stroke-width="1.5" opacity="0.4"/>
+  <line x1="16" y1="88" x2="20" y2="88" stroke="#B71C1C" stroke-width="1.5" opacity="0.4"/>
+  <line x1="60" y1="88" x2="64" y2="88" stroke="#B71C1C" stroke-width="1.5" opacity="0.4"/>
+  <line x1="23" y1="71" x2="26" y2="74" stroke="#B71C1C" stroke-width="1.5" opacity="0.4"/>
+  <line x1="57" y1="102" x2="54" y2="99" stroke="#B71C1C" stroke-width="1.5" opacity="0.4"/>
+  <line x1="57" y1="74" x2="54" y2="77" stroke="#B71C1C" stroke-width="1.5" opacity="0.4"/>
+  <line x1="23" y1="102" x2="26" y2="99" stroke="#B71C1C" stroke-width="1.5" opacity="0.4"/>
+  
+  <!-- Full-length spokes through hub -->
+  <line x1="40" y1="64" x2="40" y2="112" stroke="#B71C1C" stroke-width="1" opacity="0.25"/>
+  <line x1="16" y1="88" x2="64" y2="88" stroke="#B71C1C" stroke-width="1" opacity="0.25"/>
+  <line x1="23" y1="71" x2="57" y2="105" stroke="#B71C1C" stroke-width="1" opacity="0.25"/>
+  <line x1="57" y1="71" x2="23" y2="105" stroke="#B71C1C" stroke-width="1" opacity="0.25"/>
+  
+  <!-- Cannon carriage/trail - wooden platform the cannon sits on -->
+  <rect x="20" y="62" width="56" height="6" rx="2" fill="#B71C1C" fill-opacity="0.1" stroke="#B71C1C" stroke-width="1.5"/>
+  <!-- Carriage front leg/support -->
+  <line x1="76" y1="62" x2="80" y2="52" stroke="#B71C1C" stroke-width="2" stroke-linecap="round" opacity="0.6"/>
+  <line x1="80" y1="52" x2="86" y2="52" stroke="#B71C1C" stroke-width="2.5" stroke-linecap="round" opacity="0.6"/>
+  
+  <!-- Cannon barrel - side view, pointing right and slightly up -->
+  <!-- Main barrel body -->
+  <path d="M18 46 L18 38 C18 34 22 30 26 30 L72 24 C76 23 80 26 80 30 L80 44 C80 48 76 50 72 50 L26 54 C22 54 18 50 18 46Z" 
+        stroke="#B71C1C" stroke-width="2.5" fill="#B71C1C" fill-opacity="0.08"/>
+  
+  <!-- Barrel bore (muzzle opening) -->
+  <ellipse cx="80" cy="37" rx="2" ry="7" stroke="#B71C1C" stroke-width="2" fill="#B71C1C" fill-opacity="0.15"/>
+  
+  <!-- Barrel bands/rings -->
+  <line x1="28" y1="31" x2="28" y2="53" stroke="#B71C1C" stroke-width="1.5" opacity="0.5"/>
+  <line x1="40" y1="28" x2="40" y2="52" stroke="#B71C1C" stroke-width="1.5" opacity="0.5"/>
+  <line x1="52" y1="26" x2="52" y2="48" stroke="#B71C1C" stroke-width="1.5" opacity="0.5"/>
+  <line x1="64" y1="25" x2="64" y2="49" stroke="#B71C1C" stroke-width="1.5" opacity="0.5"/>
+  
+  <!-- Barrel highlight (top edge gleam) -->
+  <path d="M22 32 L72 26" stroke="#EF5350" stroke-width="1" opacity="0.35" stroke-linecap="round"/>
+  
+  <!-- Cannon touch hole (vent on top) -->
+  <circle cx="26" cy="36" r="1.5" fill="#B71C1C" opacity="0.5"/>
+  
+  <!-- Cannonball - sitting at muzzle -->
+  <circle cx="88" cy="37" r="6" fill="#E8E8E8"/>
+  <circle cx="88" cy="37" r="6" stroke="#B71C1C" stroke-width="2"/>
+  <!-- Ball highlight -->
+  <ellipse cx="86" cy="35" rx="2" ry="1.5" fill="white" opacity="0.5"/>
+  
+  <!-- Smoke puff at muzzle -->
+  <circle cx="94" cy="30" r="3" fill="#B71C1C" opacity="0.08"/>
+  <circle cx="96" cy="26" r="2.5" fill="#B71C1C" opacity="0.05"/>
+  
+  <!-- Team accent - small "C" on carriage -->
+  <text x="50" y="68" font-family="system-ui, sans-serif" font-size="7" font-weight="bold" fill="#B71C1C" opacity="0.4" text-anchor="middle">C</text>
+</svg>

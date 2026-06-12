@@ -1,0 +1,5 @@
+{
+  "version": 1,
+  "include": ["/api/*", "/bracket"],
+  "exclude": ["/logos/*", "/_next/*", "/*.png", "/*.svg", "/*.ico", "/*.jpg"]
+}
